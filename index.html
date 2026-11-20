@@ -540,7 +540,7 @@ function applyPose(){const{W,T}=S;const e=ease(Math.min(1,Math.max(0,unfold)));c
   jacket.fg.position.y=h;jacket.sp.position.set(0,h,0);jacket.sp.rotation.z=-Math.PI/2*(1-e);jacket.bp.rotation.z=Math.PI*1.5*(1-e);
   if(u)inner.position.x=W/2+(-T/2-W/2)*e;
   contact.scale.x=u?(W*2+T)*1.08*e+W*1.15*(1-e):contact.scale.x}
- const f=ease(Math.min(1,Math.max(0,flipOver)));bookRoot.rotation.z=Math.PI*f;bookRoot.position.y=(S.T*f+Math.sin(Math.PI*f)*S.W*0.35)*(1-e)}
+ const f=ease(Math.min(1,Math.max(0,flipOver)));bookRoot.rotation.z=Math.PI*f;{const th=Math.PI*f;bookRoot.position.y=(S.W/2*Math.sin(th)+S.T*Math.max(0,-Math.cos(th))+.05*Math.sin(th))*(1-e)}}
 function runFlipOver(dt){const k=Math.min(1,dt*1.6);let ch=false;
  if(flipOver!==flipOverT){flipOver+=Math.sign(flipOverT-flipOver)*Math.min(Math.abs(flipOverT-flipOver),k);ch=true}
  if(unfold!==unfoldT){unfold+=Math.sign(unfoldT-unfold)*Math.min(Math.abs(unfoldT-unfold),k*.8);ch=true}
@@ -757,13 +757,13 @@ const UA=navigator.userAgent;const arSupport={xr:false,cam:!!navigator.mediaDevi
 const inApp=/\bLine\/|FBAN|FBAV|FB_IAB|Instagram|MicroMessenger|WhatsApp|KAKAOTALK/i.test(UA);
 navigator.xr?.isSessionSupported?.('immersive-ar').then(v=>arSupport.xr=v).catch(()=>{});
 /* native AR: iOS AR Quick Look (USDZ) / Android Scene Viewer (GLB) — real plane tracking, 1:1 scale, environment lighting & grounding shadow */
-let DEFAULT_KEY=null,ready=null;const BUILD='20261120g';const staticCache={};
+let DEFAULT_KEY=null,ready=null;const BUILD='20261120h';const staticCache={};
 function modelKey(){return JSON.stringify([S.flipSec,S.size,S.W,S.H,S.T,S.bind,S.fit,S.fin,ART.name,ART.w,ART.h,ART.spine,ART.side])}
 async function hasStatic(f){if(inSandbox)return false;if(f in staticCache)return staticCache[f];try{const r=await fetch(f,{method:'HEAD',cache:'no-store'});staticCache[f]=r.ok}catch{staticCache[f]=false}return staticCache[f]}
-async function buildUSDZ(){return buildARStatesUSDZ()}
+async function buildUSDZ(){return buildSmoothUSDZ()}
 /* ---- AR export: baked contact shadow, snapshots, tap-to-advance states for iOS AR Quick Look ---- */
 const shadowTex=(()=>{const c=document.createElement('canvas');c.width=c.height=256;const g=c.getContext('2d');g.clearRect(0,0,256,256);g.filter='blur(13px)';g.fillStyle='rgba(0,0,0,.5)';g.fillRect(30,30,196,196);g.filter='blur(3px)';g.fillStyle='rgba(0,0,0,.45)';g.fillRect(27,27,202,202);g.filter='none';const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;return t})();
-const SHADOW_CACHE={};
+const SHADOW_CACHE={};const CONTACT_MAT=new THREE.MeshStandardMaterial({color:0x221d18,roughness:1,metalness:0});
 function shadowFor(fw,fd,mg){const key=Math.round(fw)+'x'+Math.round(fd);if(SHADOW_CACHE[key])return SHADOW_CACHE[key];
  const W=fw+2*mg,D=fd+2*mg,px=8,cw=Math.round(W*px),ch=Math.round(D*px);const c=document.createElement('canvas');c.width=cw;c.height=ch;const g=c.getContext('2d');const im=g.createImageData(cw,ch);
  const hx=fw/2-.15,hz=fd/2-.15;
@@ -778,7 +778,7 @@ function snapGroup(name,scaled){bookRoot.updateMatrixWorld(true);const c=bookRoo
  const w=new THREE.Group();w.name=name;w.add(c);w.updateMatrixWorld(true);
  const bb=new THREE.Box3().setFromObject(c);const m=1.6,sw=bb.max.x-bb.min.x+2*m,sd=bb.max.z-bb.min.z+2*m;
  const fw=bb.max.x-bb.min.x,fd=bb.max.z-bb.min.z,cx=(bb.min.x+bb.max.x)/2,cz=(bb.min.z+bb.max.z)/2;const lift=Math.max(0,bb.min.y);
- if(lift<1.5){const mg=3;const sh=new THREE.Mesh(SHADOW_GEO,shadowFor(fw,fd,mg));sh.scale.set(fw+2*mg,1,fd+2*mg);sh.position.set(cx,0.01,cz);w.add(sh)}
+ if(lift<.35){const cw=.13;[[cx,bb.min.z-cw/2,fw+2*cw,cw],[cx,bb.max.z+cw/2,fw+2*cw,cw],[bb.min.x-cw/2,cz,cw,fd],[bb.max.x+cw/2,cz,cw,fd]].forEach(([x,z,sx,sz])=>{const m=new THREE.Mesh(SHADOW_GEO,CONTACT_MAT);m.scale.set(sx,1,sz);m.position.set(x,0.006,z);w.add(m)})}
  if(scaled){const r=new THREE.Group();r.add(w);r.scale.setScalar(0.01);r.updateMatrixWorld(true);return r}return w}
 function saveBookState(){return{p:leaves.map(l=>[l.pos,l.target,l.dir]),fo:flipOver,foT:flipOverT,uf:unfold,ufT:unfoldT}}
 function loadBookState(st){leaves.forEach((l,i)=>{[l.pos,l.target,l.dir]=st.p[i]});flipOver=st.fo;flipOverT=st.foT;unfold=st.uf;unfoldT=st.ufT;if(jacket)jacket.wasU=true;updateBook(0,true);applyPose()}
@@ -836,7 +836,152 @@ async function finalizeUSDZ(files,usda,fflate){
 async function singleStateUSDZ(st){const {USDZExporter}=await import('three/addons/exporters/USDZExporter.js');const fflate=await import('three/addons/libs/fflate.module.js');
  const saved=saveBookState();setInstant(st);const g=snapGroup('Model',true);loadBookState(saved);
  const raw=await new USDZExporter().parseAsync(g,{maxTextureSize:2048});const files=fflate.unzipSync(new Uint8Array(raw));return finalizeUSDZ(files,fflate.strFromU8(files['model.usda']),fflate)}
-function qlStates(){const n=Math.max(1,Math.min(leaves.length-2,4));const st=[['▶ 自動翻頁展示','anim'],['封面',{}],['翻開',{pos:[1]}]];for(let j=2;j<=n;j++)st.push([`p${2*j-2}｜p${2*j-1}`,{pos:Array(j).fill(1)}]);st.push(['封底',{fo:1}],['攤開封面',{uf:1}]);return st}
+/* ---- smooth AR export: rigid strips animated by transform keys (no frame swapping) ---- */
+async function buildSmoothUSDZ(){const fflate=await import('three/addons/libs/fflate.module.js');
+ const saved=saveBookState();const {W,H,T}=S;const MIR=S.bind==='L';const fs=S.flipSec||1.6,TPS=60,STEP=3,SUB=2,SG=NS/SUB;
+ const R=region();const U=u=>MIR?1-u:u;const fin=FIN[S.fin];const tint=new THREE.Color(PAPER[S.paper].c);
+ const flips=Math.max(1,Math.min(leaves.length-2,4));const ones=n=>Array(n).fill(1);
+ // ---- timeline
+ const segs=[];const hold=(sec,st)=>segs.push([Math.round(sec*TPS),()=>st,true]);const mv=(sec,fn)=>segs.push([Math.round(sec*TPS),fn,false]);
+ hold(1.6,{});for(let j=0;j<flips;j++){mv(fs,u=>{const pos=ones(j);pos[j]=u;return{pos,tgt:ones(j+1)}});hold(Math.max(1.4,fs),{pos:ones(j+1)})}
+ mv(fs*1.2,u=>({pos:ones(flips).map(()=>1-u),tgt:[],dir:-1}));hold(.8,{});
+ mv(Math.max(1.4,fs*1.1),u=>({fo:u}));hold(2,{fo:1});mv(Math.max(1.2,fs*.9),u=>({fo:1-u}));hold(.4,{});
+ mv(Math.max(1.6,fs*1.2),u=>({uf:u}));hold(2.2,{uf:1});mv(Math.max(1.4,fs),u=>({uf:1-u}));
+ const samples=[];let t0=0;segs.forEach(([d,fn,isHold])=>{if(isHold){samples.push([t0,fn(0)]);samples.push([t0+d,fn(1)])}else{for(let k=0;k<=d;k+=STEP)samples.push([t0+k,fn(k/d)]);if(d%STEP)samples.push([t0+d,fn(1)])}t0+=d});const END=t0;for(let i=1;i<samples.length;i++)if(samples[i][0]<=samples[i-1][0])samples[i-1][0]=samples[i][0]-0.02;
+ // ---- tracks
+ const tracks={};const key=(name,tc,tr,rz,sc)=>{(tracks[name]=tracks[name]||[]).push([tc,tr,rz,sc])};
+ const mx=v=>MIR?-v:v,mr=a=>MIR?-a:a;const dl=W/NS;const box=new THREE.Box3(),tmp=new THREE.Box3();
+ for(const [tc,st] of samples){setInstant(st);bookRoot.updateMatrixWorld(true);
+  key('Book',tc,[0,bookRoot.position.y,0],bookRoot.rotation.z,1);key('Inner',tc,[mx(inner.position.x),0,0],0,1);
+  const unf=unfold>0.0005;
+  leaves.forEach((l,li)=>{const vis=l.front.visible&&!unf;key(`L${li}`,tc,[0,0,0],0,vis?1:1e-4);if(!vis&&tracks[`L${li}_0`]){return}
+   const p=l.g.pos;for(let s=0;s<SG;s++){const i=s*SUB,j=i+SUB;const x0=p.getX(i*2),y0=p.getY(i*2),x1=p.getX(j*2),y1=p.getY(j*2);key(`L${li}_${s}`,tc,[mx(x0),y0,0],mr(Math.atan2(y1-y0,x1-x0)),1)}});
+  ['L','R'].forEach(side=>{const m=slabs[side];const vis=m.visible&&!unf;key(`S${side}`,tc,[0,0,0],0,vis?1:1e-4);const sp=m.userData.slab.pos;
+   for(let s=0;s<SG;s++){const i=s*SUB,j=i+SUB;const xa=sp.getX(2*i+1),xb=sp.getX(2*j+1),ya=sp.getY(2*i+1),yb=sp.getY(2*j+1),bot=sp.getY(2*i);const w=Math.abs(xb-xa)+.02,h=Math.max(.001,Math.min(ya,yb)-bot-.004);key(`S${side}_${s}`,tc,[mx((xa+xb)/2),bot,0],0,[w,h,1])}});
+  key('Spine',tc,[mx(.02),0,0],mr(spineG.rotation.z),spineG.visible&&!unf?1:1e-4);
+  key('Back',tc,[0,0,0],0,backPlane.visible&&!unf?1:1e-4);
+  key('Jacket',tc,[0,0,0],0,unf?1:1e-4);key('JF',tc,[0,jacket.fg.position.y,0],0,1);key('JS',tc,[mx(jacket.sp.position.x),jacket.sp.position.y,0],mr(jacket.sp.rotation.z),1);key('JB',tc,[mx(S.T),0,0],mr(jacket.bp.rotation.z),1);
+  // footprint for contact line (world cm)
+  box.makeEmpty();bookRoot.traverseVisible(o=>{if(o.isMesh&&o.name!=='contact'){o.geometry.computeBoundingBox();tmp.copy(o.geometry.boundingBox).applyMatrix4(o.matrixWorld);box.union(tmp)}});
+  const low=box.min.y<.35;const cw=.13,cx=(box.min.x+box.max.x)/2,cz=(box.min.z+box.max.z)/2,fw=box.max.x-box.min.x,fd=box.max.z-box.min.z;const z=low?1:1e-4;
+  key('CN',tc,[cx,0,box.min.z-cw/2],0,[fw+2*cw,1,cw*z]);key('CS',tc,[cx,0,box.max.z+cw/2],0,[fw+2*cw,1,cw*z]);key('CW',tc,[box.min.x-cw/2,0,cz],0,[cw*z,1,fd]);key('CE',tc,[box.max.x+cw/2,0,cz],0,[cw*z,1,fd])}
+ loadBookState(saved);
+ const tiny=sc=>Array.isArray(sc)?Math.min(...sc)<=1e-3:sc<=1e-3;
+ for(const n in tracks){const tk=tracks[n],out=[];tk.forEach((r,i)=>{const p=tk[i-1];if(p&&tiny(p[3])!==tiny(r[3])&&r[0]-p[0]>0.03)out.push([+(r[0]-0.01).toFixed(3),p[1],p[2],p[3]]);out.push(r)});tracks[n]=out}
+ // ---- materials & textures
+ const files={},mats=[],texIds=new Map();let nTex=0;
+ async function texFile(src,png){if(texIds.has(src))return texIds.get(src);const img=src.isTexture?src.image:src;const sw=img.width||img.videoWidth,sh=img.height;const k=Math.min(1,2048/Math.max(sw,sh));const c=document.createElement('canvas');c.width=Math.round(sw*k);c.height=Math.round(sh*k);const g=c.getContext('2d');g.translate(0,c.height);g.scale(1,-1);g.drawImage(img,0,0,c.width,c.height);
+  const name=`textures/T${nTex++}.${png?'png':'jpg'}`;const b=await new Promise(r=>c.toBlob(r,png?'image/png':'image/jpeg',.9));files[name]=new Uint8Array(await b.arrayBuffer());texIds.set(src,name);return name}
+ const f3=v=>`(${v.map(n=>+n.toFixed(5)).join(', ')})`;
+ function mat(name,{tex=null,color=[1,1,1],rough=.9,cc=0,ccr=.5,wrap='clamp',tintTex=null}){const P=`/Root/Materials/${name}`;
+  let s=`def Material "${name}"\n{\ntoken outputs:surface.connect = <${P}/PS.outputs:surface>\ndef Shader "PS"\n{\nuniform token info:id = "UsdPreviewSurface"\n`;
+  s+=tex?`color3f inputs:diffuseColor.connect = <${P}/Tex.outputs:rgb>\n`:`color3f inputs:diffuseColor = ${f3(color)}\n`;
+  s+=`float inputs:roughness = ${rough}\nfloat inputs:metallic = 0\n${cc?`float inputs:clearcoat = ${cc}\nfloat inputs:clearcoatRoughness = ${ccr}\n`:''}token outputs:surface\n}\n`;
+  if(tex)s+=`def Shader "Reader"\n{\nuniform token info:id = "UsdPrimvarReader_float2"\nfloat2 inputs:fallback = (0, 0)\ntoken inputs:varname = "st"\nfloat2 outputs:result\n}\ndef Shader "Tex"\n{\nuniform token info:id = "UsdUVTexture"\nasset inputs:file = @${tex}@\nfloat2 inputs:st.connect = <${P}/Reader.outputs:result>\nfloat4 inputs:scale = (${(tintTex||[1,1,1]).map(n=>+n.toFixed(4)).join(', ')}, 1)\ntoken inputs:sourceColorSpace = "sRGB"\ntoken inputs:wrapS = "${wrap}"\ntoken inputs:wrapT = "${wrap}"\nfloat3 outputs:rgb\n}\n`;
+  mats.push(s+'}\n');return `/Root/Materials/${name}`}
+ const tl=[tint.r,tint.g,tint.b].map(c=>Math.pow(c,1/2.2));
+ const M_cover=mat('Cover',{tex:await texFile(artTex.image),rough:fin.r,cc:fin.cc,ccr:fin.ccr});
+ const M_paper=mat('Paper',{color:tl,rough:.85});const M_edge=mat('Edge',{tex:await texFile(edgeTex.image,true),wrap:'repeat',tintTex:[.89,.86,.81],rough:.95});
+ const M_contact=mat('Contact',{color:[.13,.115,.1],rough:1});
+ const pageMat={};async function pm(src,idx){if(!src)return M_paper;if(pageMat[idx])return pageMat[idx];return pageMat[idx]=mat('Page'+idx,{tex:await texFile(src),tintTex:tl,rough:S.paper==='coat'?.55:.9})}
+ // ---- geometry helpers (local, unmirrored; mirror applied here)
+ const K=0.01;let meshN=0;
+ function meshStr(quads,matPath){ // quads: [[p0,p1,p2,p3],[uv0..uv3],normalHint]
+  const pts=[],uvs=[],nrm=[],idx=[],cnt=[];quads.forEach(([P,UV,nh])=>{let ps=P.map(p=>[MIR?-p[0]:p[0],p[1],p[2]]);let n=[MIR?-nh[0]:nh[0],nh[1],nh[2]];let uv=UV.slice();
+   const a=ps[0],b=ps[1],c=ps[2];const e1=[b[0]-a[0],b[1]-a[1],b[2]-a[2]],e2=[c[0]-a[0],c[1]-a[1],c[2]-a[2]];const cr=[e1[1]*e2[2]-e1[2]*e2[1],e1[2]*e2[0]-e1[0]*e2[2],e1[0]*e2[1]-e1[1]*e2[0]];
+   if(cr[0]*n[0]+cr[1]*n[1]+cr[2]*n[2]<0){ps=[ps[0],ps[3],ps[2],ps[1]];uv=[uv[0],uv[3],uv[2],uv[1]]}
+   const o=pts.length;ps.forEach((p,k)=>{pts.push(p);uvs.push(uv[k]);nrm.push(n)});cnt.push(4);idx.push(o,o+1,o+2,o+3)});
+  const v3=a=>a.map(p=>`(${p.map(n=>+n.toFixed(5)).join(', ')})`).join(', ');
+  return `def Mesh "M${meshN++}" (\nprepend apiSchemas = ["MaterialBindingAPI"]\n)\n{\nint[] faceVertexCounts = [${cnt.join(', ')}]\nint[] faceVertexIndices = [${idx.join(', ')}]\npoint3f[] points = [${v3(pts)}]\nnormal3f[] normals = [${v3(nrm)}] (\ninterpolation = "vertex"\n)\ntexCoord2f[] primvars:st = [${uvs.map(u=>`(${+u[0].toFixed(5)}, ${+u[1].toFixed(5)})`).join(', ')}] (\ninterpolation = "vertex"\n)\nuniform token subdivisionScheme = "none"\nrel material:binding = <${matPath}>\n}\n`}
+ const quad=(x0,x1,y,z0,z1,u,nh)=>[[[x0,y,z0],[x1,y,z0],[x1,y,z1],[x0,y,z1]],u,nh];
+ // animated xform writer
+ const fmtT=v=>`(${v.map(n=>+(+n).toFixed(5)).join(', ')})`;
+ function anim(name,body,{scaleK=1}={}){const tk=tracks[name];if(!tk)return `def Xform "${name}"\n{\n${body}}\n`;
+  const ser=tk.map(([tc,tr,rz,sc])=>{const s=Array.isArray(sc)?sc:[sc,sc,sc];return[tc,fmtT(tr),`(${+Math.cos(rz/2).toFixed(6)}, 0, 0, ${+Math.sin(rz/2).toFixed(6)})`,fmtT(s)]});
+  const comp=(col)=>{const out=[];ser.forEach((r,i)=>{const prev=ser[i-1],next=ser[i+1];if(prev&&next&&prev[col]===r[col]&&next[col]===r[col])return;out.push(`${r[0]}: ${r[col]}`)});return out};
+  const ops=[];let s='';const tA=comp(1),rA=comp(2),sA=comp(3);
+  const isConst=(arr)=>arr.length<=2&&ser.every(r=>r===ser[0]||true)&&new Set(arr.map(a=>a.split(': ')[1])).size===1;
+  const wr=(type,op,arr)=>{if(isConst(arr)){s+=`${type} xformOp:${op} = ${arr[0].split(': ')[1]}\n`}else s+=`${type} xformOp:${op}.timeSamples = {\n${arr.join(',\n')}\n}\n`;ops.push(`"xformOp:${op}"`)};
+  wr('double3','translate',tA);wr('quatf','orient',rA);wr('float3','scale',sA);
+  return `def Xform "${name}"\n{\n${s}uniform token[] xformOpOrder = [${ops.join(', ')}]\n${body}}\n`}
+ // ---- build prims
+ let book='';const leafFaces=[[null,insideCover(W,H)]];
+ const pages=PAGES||(pageMode==='sample'||!BOOK_PAGES?makeSamplePages(W,H):BOOK_PAGES);const nContent=Math.ceil(pages.length/2);
+ // reuse the live leaf materials' sources
+ let leavesStr='';for(let li=0;li<leaves.length;li++){const l=leaves[li];const fsrc=li===0?null:(l.front.material.map?.image||null),bsrc=l.back.material.map?.image||null;
+  const Mf=li===0?M_cover:await pm(fsrc,'f'+li),Mb=l.back.material===l.front.material&&li!==0?Mf:await pm(bsrc,'b'+li);
+  let strips='';for(let s=0;s<SG;s++){const d0=s*SUB*dl,d1=(s+1)*SUB*dl,L=d1-d0+.04;
+   const uvF=(d,v)=>li===0?R('front',U(1-d/W),v):[U(1-d/W),v],uvB=(d,v)=>[U(d/W),v];
+   const qf=[[[0,0,-H/2],[L,0,-H/2],[L,0,H/2],[0,0,H/2]],[uvF(d0,1),uvF(d0+L,1),uvF(d0+L,0),uvF(d0,0)],[0,-1,0]];
+   const qb=[[[0,0,-H/2],[L,0,-H/2],[L,0,H/2],[0,0,H/2]],[uvB(d0,1),uvB(d0+L,1),uvB(d0+L,0),uvB(d0,0)],[0,1,0]];
+   strips+=anim(`L${li}_${s}`,meshStr([qf],Mf)+meshStr([qb],Mb))}
+  leavesStr+=anim(`L${li}`,strips)}
+ let slabStr='';for(const side of ['L','R']){let cols='';for(let s=0;s<SG;s++){const hz=H/2;
+   const head=[[[-.5,0,-hz],[.5,0,-hz],[.5,1,-hz],[-.5,1,-hz]],[[0,0],[1,0],[1,8],[0,8]],[0,0,-1]],tail=[[[-.5,0,hz],[.5,0,hz],[.5,1,hz],[-.5,1,hz]],[[0,0],[1,0],[1,8],[0,8]],[0,0,1]];
+   const xa=[[[-.5,0,-hz],[-.5,0,hz],[-.5,1,hz],[-.5,1,-hz]],[[0,0],[H*.25,0],[H*.25,8],[0,8]],[-1,0,0]],xb=[[[.5,0,-hz],[.5,0,hz],[.5,1,hz],[.5,1,-hz]],[[0,0],[H*.25,0],[H*.25,8],[0,8]],[1,0,0]];
+   const top=[[[-.5,1,-hz],[.5,1,-hz],[.5,1,hz],[-.5,1,hz]],[[0,0],[1,0],[1,1],[0,1]],[0,1,0]];
+   cols+=anim(`S${side}_${s}`,meshStr([head,tail,xa,xb],M_edge)+meshStr([top],M_paper))}slabStr+=anim(`S${side}`,cols)}
+ // spine (plane in y-z at x=0 facing +x; spans y 0..T)
+ const spQ=[[[0,0,-H/2],[0,T,-H/2],[0,T,H/2],[0,0,H/2]],[R('spine',U(1),1),R('spine',U(0),1),R('spine',U(0),0),R('spine',U(1),0)],[1,0,0]];
+ const spine=anim('Spine',meshStr([spQ],M_cover));
+ const bkQ=[[[-W,TC/2,-H/2],[0,TC/2,-H/2],[0,TC/2,H/2],[-W,TC/2,H/2]],[R('back',U(1),1),R('back',U(0),1),R('back',U(0),0),R('back',U(1),0)],[0,-1,0]];
+ const back=anim('Back',meshStr([bkQ],M_cover));
+ const fpan=quad(-W,0,0,-H/2,H/2,[R('front',U(0),1),R('front',U(1),1),R('front',U(1),0),R('front',U(0),0)],[0,1,0]),fin_=quad(-W,0,0,-H/2,H/2,[[0,0],[1,0],[1,1],[0,1]],[0,-1,0]);
+ const span=quad(0,T,0,-H/2,H/2,[R('spine',U(0),1),R('spine',U(1),1),R('spine',U(1),0),R('spine',U(0),0)],[0,1,0]),sin_=quad(0,T,0,-H/2,H/2,[[0,0],[1,0],[1,1],[0,1]],[0,-1,0]);
+ const bpan=quad(0,W,0,-H/2,H/2,[R('back',U(0),1),R('back',U(1),1),R('back',U(1),0),R('back',U(0),0)],[0,1,0]),bin_=quad(0,W,0,-H/2,H/2,[[0,0],[1,0],[1,1],[0,1]],[0,-1,0]);
+ const jacketStr=anim('Jacket',anim('JF',meshStr([fpan],M_cover)+meshStr([fin_],M_paper))+anim('JS',meshStr([span],M_cover)+meshStr([sin_],M_paper)+anim('JB',meshStr([bpan],M_cover)+meshStr([bin_],M_paper))));
+ const inner_=anim('Inner',leavesStr+slabStr+spine+back+jacketStr);
+ const bookStr=anim('Book',inner_);
+ const cq=[[[-.5,0.006,-.5],[.5,0.006,-.5],[.5,0.006,.5],[-.5,0.006,.5]],[[0,0],[1,0],[1,1],[0,1]],[0,1,0]];
+ const saveMIR=MIR;const contactStr=['CN','CS','CW','CE'].map(n=>anim(n,(()=>{return meshStr([cq],M_contact)})())).join('');
+ const usda=`#usda 1.0
+(
+\tcustomLayerData = {
+\t\tstring creator = "LT textbook AR"
+\t}
+\tdefaultPrim = "Root"
+\tmetersPerUnit = 1
+\tupAxis = "Y"
+\tstartTimeCode = 0
+\tendTimeCode = ${END}
+\ttimeCodesPerSecond = ${TPS}
+\tframesPerSecond = ${TPS}
+)
+
+def Xform "Root"
+{
+def Scope "Scenes" (
+kind = "sceneLibrary"
+)
+{
+def Xform "Scene" (
+apiSchemas = ["Preliminary_AnchoringAPI"]
+customData = {
+bool preliminary_collidesWithEnvironment = 0
+string sceneName = "Scene"
+}
+sceneName = "Scene"
+)
+{
+token preliminary:anchoring:type = "plane"
+token preliminary:planeAnchoring:alignment = "horizontal"
+def Xform "Units"
+{
+double3 xformOp:scale = (${K}, ${K}, ${K})
+uniform token[] xformOpOrder = ["xformOp:scale"]
+${bookStr}${contactStr}}
+}
+}
+def "Materials"
+{
+${mats.join('')}}
+}
+`;
+ const out={'model.usda':fflate.strToU8(usda)};for(const k in files)out[k]=files[k];
+ let off=0;for(const fn in out){const f=out[fn];off+=34+fn.length;const m64=off&63;if(m64!==4){out[fn]=[f,{extra:{12345:new Uint8Array(64-m64)}}]}off=f.length}
+ return fflate.zipSync(out,{level:0})}
+
+function qlStates(){const n=Math.max(1,Math.min(leaves.length-2,4));const st=[['封面',{}],['翻開',{pos:[1]}]];for(let j=2;j<=n;j++)st.push([`p${2*j-2}｜p${2*j-1}`,{pos:Array(j).fill(1)}]);st.push(['封底',{fo:1}],['攤開封面',{uf:1}]);return st}
 let qlCache={key:null,urls:[]};
 async function prepStates(){const key=modelKey();const list=qlStates();if(qlCache.key!==key){qlCache={key,urls:[]}}
  const box=$('#qlStates');if(!box)return;const draw=()=>{box.innerHTML=list.map(([t],i)=>qlCache.urls[i]?`<a class="opt" rel="ar" href="${qlCache.urls[i]}#allowsContentScaling=0" style="text-decoration:none;color:inherit"><img alt="" style="display:none">${t}</a>`:`<button class="opt" disabled>${t}<small>準備中…</small></button>`).join('')};draw();
@@ -854,7 +999,7 @@ async function goAR(){
  if(arSupport.android){if(arSupport.xr)return startXR();if(modelKey()===DEFAULT_KEY&&await hasStatic('textbook.glb')){location.href=sceneViewerURL();return}}
  arModal()}
 function arModal(qlURL){const items=[
- {k:'ios',t:'iPhone / iPad 原生 AR（點書本翻頁）',s:inSandbox?'需在正式網址以 Safari 開啟':inApp?'請先改用 Safari 開啟':arSupport.ios?'自動貼合桌面；點書本即可翻開、翻頁、看封底、攤開封面':'請用 iPhone 或 iPad 的 Safari 開啟',ok:arSupport.ios&&!inSandbox&&!inApp,ql:qlURL},
+ {k:'ios',t:'iPhone / iPad 原生 AR（自動翻頁展示）',s:inSandbox?'需在正式網址以 Safari 開啟':inApp?'請先改用 Safari 開啟':arSupport.ios?'貼合桌面，流暢播放：翻開 → 翻頁 → 封底 → 攤開封面；可用暫停鍵停在任一畫面':'請用 iPhone 或 iPad 的 Safari 開啟',ok:arSupport.ios&&!inSandbox&&!inApp,ql:qlURL},
  {k:'sv',t:'Android 原生 AR（Scene Viewer）',s:inSandbox?'需在正式網址以 Chrome 開啟':arSupport.android?'自動偵測桌面，1:1 尺寸、真實透視與環境光影（目前預設設定）':'請用 Android 手機的 Chrome 開啟',ok:arSupport.android&&!inSandbox&&!inApp},
  {k:'xr',t:'WebXR AR（Android Chrome・可翻頁）',s:inSandbox?'需在正式網址開啟':arSupport.xr?'偵測桌面後點一下放置；畫面下方按鈕可翻頁、看封底、攤開':'此裝置不支援 WebXR',ok:arSupport.xr&&!inSandbox},
  {k:'photo',t:'照片實境',s:'拍一張桌面照片當背景，在照片上擺書（任何裝置可用）',ok:true},
@@ -862,10 +1007,10 @@ function arModal(qlURL){const items=[
  {k:'zip',t:'下載 3D 模型包（USDZ＋GLB）',s:'匯入簡報、Reality Composer 或其他 AR 平台',ok:true}];
  $('#siteLink').hidden=!inSandbox;
  $('#arEnvNote').textContent=inSandbox?'claude.ai 檢視框架會封鎖相機與 AR，請按下方按鈕在正式網址開啟。':inApp?'你目前在 LINE／FB 等 App 的內建瀏覽器，無法啟動 AR。請點右上角「⋯」選「用瀏覽器開啟」（iPhone 選 Safari、Android 選 Chrome）。':'原生 AR 會自動偵測桌面，書本以 1:1 實際尺寸、正確透視放上，並依現場光線打光、產生落地陰影。';
- if(qlURL)$('#arEnvNote').textContent='AR 模型已就緒。進入 AR 後書會自動貼合桌面（1:1、真實透視與光影）；點一下書本依序：翻開封面 → 翻頁 → 闔上翻到封底 → 攤開整張封面 → 回到封面。';
+ if(qlURL)$('#arEnvNote').textContent='AR 模型已就緒。進入 AR 後書會以 1:1 尺寸貼合桌面並自動播放：翻開封面 → 翻頁 → 闔上看封底 → 攤開整張封面，循環播放；畫面上的暫停鍵可停在任一畫面細看。';
  items.sort((x,y)=>(y.ok-x.ok));
  $('#arList').innerHTML=items.map(i=>{const inner=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="4"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5"/></svg><div><b>${i.t}</b><small>${i.s}</small></div>`;
-  return i.ql?`<a class="aropt" rel="ar" href="${i.ql}#allowsContentScaling=0" style="text-decoration:none;color:inherit"><img alt="" style="display:none">${inner}</a>`:`<button class="aropt" data-k="${i.k}" ${i.ok?'':'disabled'}>${inner}</button>`}).join('');if(arSupport.ios&&!inSandbox&&!inApp){$('#arList').insertAdjacentHTML('beforeend','<h3 style="font-size:13px;color:var(--mute);margin:12px 0 6px;font-weight:500">翻頁速度</h3><div class="grid" id="spdGrid">'+[[2.6,'慢'],[1.6,'標準'],[0.9,'快']].map(([v,t])=>`<button class="opt ${Math.abs(S.flipSec-v)<.05?'on':''}" data-s="${v}">${t}<small>每頁 ${v} 秒</small></button>`).join('')+'</div>');$('#spdGrid').onclick=async e=>{const b=e.target.closest('[data-s]');if(!b)return;S.flipSec=+b.dataset.s;updateUI();ready=null;$('#arModal').classList.remove('on');goAR()};$('#arList').insertAdjacentHTML('beforeend','<h3 style="font-size:13px;color:var(--mute);margin:12px 0 6px;font-weight:500">自動展示，或以指定畫面進入 AR</h3><div class="grid" id="qlStates"></div>');prepStates()}
+  return i.ql?`<a class="aropt" rel="ar" href="${i.ql}#allowsContentScaling=0" style="text-decoration:none;color:inherit"><img alt="" style="display:none">${inner}</a>`:`<button class="aropt" data-k="${i.k}" ${i.ok?'':'disabled'}>${inner}</button>`}).join('');if(arSupport.ios&&!inSandbox&&!inApp){$('#arList').insertAdjacentHTML('beforeend','<h3 style="font-size:13px;color:var(--mute);margin:12px 0 6px;font-weight:500">翻頁速度</h3><div class="grid" id="spdGrid">'+[[2.6,'慢'],[1.6,'標準'],[0.9,'快']].map(([v,t])=>`<button class="opt ${Math.abs(S.flipSec-v)<.05?'on':''}" data-s="${v}">${t}<small>每頁 ${v} 秒</small></button>`).join('')+'</div>');$('#spdGrid').onclick=async e=>{const b=e.target.closest('[data-s]');if(!b)return;S.flipSec=+b.dataset.s;updateUI();ready=null;$('#arModal').classList.remove('on');goAR()};$('#arList').insertAdjacentHTML('beforeend','<h3 style="font-size:13px;color:var(--mute);margin:12px 0 6px;font-weight:500">或以指定畫面進入 AR（靜態）</h3><div class="grid" id="qlStates"></div>');prepStates()}
  $('#arModal').classList.add('on')}
 $('#arBtn').onclick=goAR;
 $('#arList').onclick=async e=>{const b=e.target.closest('.aropt');if(!b||b.disabled)return;if(b.tagName==='A'){setTimeout(()=>$('#arModal').classList.remove('on'),300);return}$('#arModal').classList.remove('on');const k=b.dataset.k;
