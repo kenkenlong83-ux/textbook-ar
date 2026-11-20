@@ -476,15 +476,15 @@ function buildBook(keepState=true){
 let LAM=1.3;const GY=TC*1.2;let slabs={},jacket=null;
 function planeUp(w,h,x0,uvFn){const g=new THREE.PlaneGeometry(w,h,1,1);g.rotateX(-Math.PI/2);g.translate(x0+w/2,0,0);const p=g.attributes.position,uv=g.attributes.uv;for(let k=0;k<p.count;k++){const[a,b]=uvFn(p.getX(k),p.getZ(k)<0?1:0);uv.setXY(k,a,b)}return g}
 function flipGeo(g){const c=g.clone();const ix=c.index.array;for(let i=0;i<ix.length;i+=3){const t=ix[i+1];ix[i+1]=ix[i+2];ix[i+2]=t}c.index.needsUpdate=true;c.computeVertexNormals();return c}
-function buildJacket(R,U,tint){const{W,H,T}=S;jacket={g:new THREE.Group(),sp:new THREE.Group(),bp:new THREE.Group()};inner.add(jacket.g);
- const inMat=new THREE.MeshStandardMaterial({color:tint,roughness:.8});pageMats.push(inMat);
- const add=(parent,geo)=>{const a=new THREE.Mesh(geo,coverMat),b=new THREE.Mesh(flipGeo(geo),inMat);[a,b].forEach(m=>{m.castShadow=true;m.receiveShadow=true;m.userData.side='J';parent.add(m)});return a};
- jacket.fg=new THREE.Group();jacket.g.add(jacket.fg);jacket.front=add(jacket.fg,planeUp(W,H,-W,(x,v)=>R('front',U(1+x/W),v)));
- jacket.g.add(jacket.sp);add(jacket.sp,planeUp(T,H,0,(x,v)=>R('spine',U(x/T),v)));
- jacket.sp.add(jacket.bp);jacket.bp.position.x=T;add(jacket.bp,planeUp(W,H,0,(x,v)=>R('back',U(x/W),v)));
- const bm=[new THREE.MeshStandardMaterial({map:edgeTex,color:0xe2dccf,roughness:.95}),new THREE.MeshStandardMaterial({color:tint,roughness:.9})];pageMats.push(...bm);
- const blk=(parent,w,x0)=>{const g=new THREE.BoxGeometry(w,T/2,H);g.translate(x0+w/2,-T/4-.006,0);const m=new THREE.Mesh(g,[bm[0],bm[0],bm[1],bm[1],bm[0],bm[0]]);m.castShadow=m.receiveShadow=true;m.userData.side='J';parent.add(m);return m};
- jacket.blocks=[blk(jacket.fg,W-.02,-W+.01),blk(jacket.sp,T,0),blk(jacket.bp,W-.02,.01)];
+function buildJacket(R,U,tint){const{W,H,T}=S;jacket={g:new THREE.Group(),k:new THREE.Group(),bp:new THREE.Group(),sp:new THREE.Group(),fp:new THREE.Group()};
+ inner.add(jacket.g);jacket.g.add(jacket.k);jacket.k.add(jacket.bp,jacket.sp);jacket.sp.add(jacket.fp);jacket.fp.position.x=T;jacket.bp.rotation.z=Math.PI;
+ const inMat=new THREE.MeshStandardMaterial({color:tint,roughness:.8});const bm=[new THREE.MeshStandardMaterial({map:edgeTex,color:0xe2dccf,roughness:.95}),new THREE.MeshStandardMaterial({color:tint,roughness:.9})];pageMats.push(inMat,...bm);
+ const mk=(p,g,m)=>{const x=new THREE.Mesh(g,m);x.castShadow=x.receiveShadow=true;x.userData.side='J';p.add(x)};
+ const panel=(p,w,uvFn,down)=>{const g=planeUp(w,H,0,uvFn);mk(p,down?flipGeo(g):g,coverMat);mk(p,down?g:flipGeo(g),inMat)};
+ const blk=(p,w,x0,y0,y1)=>{const g=new THREE.BoxGeometry(w,y1-y0,H);g.translate(x0+w/2,(y0+y1)/2,0);const m=new THREE.Mesh(g,[bm[0],bm[0],bm[1],bm[1],bm[0],bm[0]]);m.castShadow=m.receiveShadow=true;m.userData.side='J';p.add(m)};
+ panel(jacket.bp,W,(x,v)=>R('back',U(x/W),v),false);blk(jacket.bp,W-.02,.01,-T/2,-.006);
+ panel(jacket.sp,T,(x,v)=>R('spine',U(1-x/T),v),true);blk(jacket.sp,T,0,.006,T/2);
+ panel(jacket.fp,W,(x,v)=>R('front',U(1-x/W),v),true);blk(jacket.fp,W-.02,.01,.006,T/2);
  jacket.g.visible=false}
 function makeSlab(side,mat){const n=NS+1,cnt=n*4+8;const pos=new THREE.BufferAttribute(new Float32Array(cnt*3),3),uv=new THREE.BufferAttribute(new Float32Array(cnt*2),2);pos.setUsage(THREE.DynamicDrawUsage);uv.setUsage(THREE.DynamicDrawUsage);
  const g=new THREE.BufferGeometry();g.userData.dyn=true;g.setAttribute('position',pos);g.setAttribute('uv',uv);const idx=[];const L=side==='L';
@@ -542,8 +542,9 @@ function applyPose(){const{W,T}=S;const e=ease(Math.min(1,Math.max(0,unfold)));c
   if(u)[...leaves.flatMap(l=>[l.front,l.back]),slabs.L,slabs.R,backPlane,spineG].forEach(m=>{if(m)m.visible=false});
   else if(jacket.wasU)updateBook(0,true);
   jacket.wasU=u;
-  const h=T*(1-e)+T/2*e+.02+.3*T*Math.sin(Math.PI*e);
-  jacket.fg.position.y=h;jacket.sp.position.set(0,h,0);jacket.sp.rotation.z=-Math.PI/2*(1-e);jacket.bp.rotation.z=Math.PI*1.5*(1-e);
+  const cl=v=>Math.min(1,Math.max(0,v));const A=ease(cl(unfold*2)),B=ease(cl(unfold*2-1));
+  jacket.sp.rotation.z=Math.PI/2*(1-A);jacket.fp.rotation.z=Math.PI/2*(1-A);
+  jacket.k.position.set(-T/2,0,0);jacket.g.position.set(T/2,.02+T/2*B+(W+T/2+.05)*Math.sin(Math.PI*B),0);jacket.g.rotation.z=Math.PI*B;
   if(u)inner.position.x=W/2+(-T/2-W/2)*e;
   contact.scale.x=u?(W*2+T)*1.08*e+W*1.15*(1-e):contact.scale.x}
  const f=ease(Math.min(1,Math.max(0,flipOver)));bookRoot.rotation.z=Math.PI*f;{const th=Math.PI*f;bookRoot.position.y=(S.W/2*Math.sin(th)+S.T*Math.max(0,-Math.cos(th))+.05*Math.sin(th))*(1-e)}}
@@ -763,7 +764,7 @@ const UA=navigator.userAgent;const arSupport={xr:false,cam:!!navigator.mediaDevi
 const inApp=/\bLine\/|FBAN|FBAV|FB_IAB|Instagram|MicroMessenger|WhatsApp|KAKAOTALK/i.test(UA);
 navigator.xr?.isSessionSupported?.('immersive-ar').then(v=>arSupport.xr=v).catch(()=>{});
 /* native AR: iOS AR Quick Look (USDZ) / Android Scene Viewer (GLB) — real plane tracking, 1:1 scale, environment lighting & grounding shadow */
-let DEFAULT_KEY=null,ready=null;const BUILD='20261120j';const staticCache={};
+let DEFAULT_KEY=null,ready=null;const BUILD='20261120k';const staticCache={};
 function modelKey(){return JSON.stringify([S.flipSec,S.size,S.W,S.H,S.T,S.bind,S.fit,S.fin,ART.name,ART.w,ART.h,ART.spine,ART.side])}
 async function hasStatic(f){if(inSandbox)return false;if(f in staticCache)return staticCache[f];try{const r=await fetch(f,{method:'HEAD',cache:'no-store'});staticCache[f]=r.ok}catch{staticCache[f]=false}return staticCache[f]}
 async function buildUSDZ(){return buildSmoothUSDZ()}
@@ -866,7 +867,7 @@ async function buildSmoothUSDZ(){const fflate=await import('three/addons/libs/ff
    for(let s=0;s<SG;s++){const i=s*SUB,j=i+SUB;const xa=sp.getX(2*i+1),xb=sp.getX(2*j+1),ya=sp.getY(2*i+1),yb=sp.getY(2*j+1),bot=sp.getY(2*i);const w=Math.abs(xb-xa)+.02,h=Math.max(.001,Math.min(ya,yb)-bot-.004);key(`S${side}_${s}`,tc,[mx((xa+xb)/2),bot,0],0,[w,h,1])}});
   key('Spine',tc,[mx(.02),0,0],mr(spineG.rotation.z),spineG.visible&&!unf?1:1e-4);
   key('BackCover',tc,[0,0,0],0,backPlane.visible&&!unf?1:1e-4);
-  key('Jacket',tc,[0,0,0],0,unf?1:1e-4);key('JF',tc,[0,jacket.fg.position.y,0],0,1);key('JS',tc,[mx(jacket.sp.position.x),jacket.sp.position.y,0],mr(jacket.sp.rotation.z),1);key('JB',tc,[mx(S.T),0,0],mr(jacket.bp.rotation.z),1);
+  key('Jacket',tc,[mx(jacket.g.position.x),jacket.g.position.y,0],mr(jacket.g.rotation.z),unf?1:1e-4);key('JK',tc,[mx(-S.T/2),0,0],0,1);key('JB',tc,[0,0,0],mr(jacket.bp.rotation.z),1);key('JS',tc,[0,0,0],mr(jacket.sp.rotation.z),1);key('JF',tc,[mx(S.T),0,0],mr(jacket.fp.rotation.z),1);
   // footprint for contact line (world cm)
   box.makeEmpty();bookRoot.traverseVisible(o=>{if(o.isMesh&&o.name!=='contact'){o.geometry.computeBoundingBox();tmp.copy(o.geometry.boundingBox).applyMatrix4(o.matrixWorld);box.union(tmp)}});
   const low=box.min.y<.35;const cw=.13,cx=(box.min.x+box.max.x)/2,cz=(box.min.z+box.max.z)/2,fw=box.max.x-box.min.x,fd=box.max.z-box.min.z;const z=low?1:1e-4;
@@ -935,18 +936,18 @@ async function buildSmoothUSDZ(){const fflate=await import('three/addons/libs/ff
  const spQ2=[spQ[0].map(p=>[p[0]-.004,p[1],p[2]]),spQ[1],[-1,0,0]];const spine=anim('Spine',meshStr([spQ],M_cover)+meshStr([spQ2],M_paper));
  const bkQ=[[[-W,TC/2,-H/2],[0,TC/2,-H/2],[0,TC/2,H/2],[-W,TC/2,H/2]],[R('back',U(1),1),R('back',U(0),1),R('back',U(0),0),R('back',U(1),0)],[0,-1,0]];
  const bkQ2=[bkQ[0].map(p=>[p[0],p[1]+.004,p[2]]),bkQ[1],[0,1,0]];const back=anim('BackCover',meshStr([bkQ],M_cover)+meshStr([bkQ2],M_paper));
- const fpan=quad(-W,0,0,-H/2,H/2,[R('front',U(0),1),R('front',U(1),1),R('front',U(1),0),R('front',U(0),0)],[0,1,0]),fin_=quad(-W,0,0,-H/2,H/2,[[0,0],[1,0],[1,1],[0,1]],[0,-1,0]);
- const span=quad(0,T,0,-H/2,H/2,[R('spine',U(0),1),R('spine',U(1),1),R('spine',U(1),0),R('spine',U(0),0)],[0,1,0]),sin_=quad(0,T,0,-H/2,H/2,[[0,0],[1,0],[1,1],[0,1]],[0,-1,0]);
- const bpan=quad(0,W,0,-H/2,H/2,[R('back',U(0),1),R('back',U(1),1),R('back',U(1),0),R('back',U(0),0)],[0,1,0]),bin_=quad(0,W,0,-H/2,H/2,[[0,0],[1,0],[1,1],[0,1]],[0,-1,0]);
+ const bpan=quad(0,W,0,-H/2,H/2,[R('back',U(0),1),R('back',U(1),1),R('back',U(1),0),R('back',U(0),0)],[0,1,0]);
+ const span=quad(0,T,0,-H/2,H/2,[R('spine',U(1),1),R('spine',U(0),1),R('spine',U(0),0),R('spine',U(1),0)],[0,-1,0]);
+ const fpan=quad(0,W,0,-H/2,H/2,[R('front',U(1),1),R('front',U(0),1),R('front',U(0),0),R('front',U(1),0)],[0,-1,0]);
  const boxQ=(x0,x1,y0,y1,z0,z1)=>{const e=[],t=[];const hz=[z0,z1];
   e.push([[[x0,y0,z0],[x1,y0,z0],[x1,y1,z0],[x0,y1,z0]],[[0,0],[(x1-x0)*.25,0],[(x1-x0)*.25,6],[0,6]],[0,0,-1]]);
   e.push([[[x0,y0,z1],[x1,y0,z1],[x1,y1,z1],[x0,y1,z1]],[[0,0],[(x1-x0)*.25,0],[(x1-x0)*.25,6],[0,6]],[0,0,1]]);
   e.push([[[x0,y0,z0],[x0,y0,z1],[x0,y1,z1],[x0,y1,z0]],[[0,0],[(z1-z0)*.25,0],[(z1-z0)*.25,6],[0,6]],[-1,0,0]]);
   e.push([[[x1,y0,z0],[x1,y0,z1],[x1,y1,z1],[x1,y1,z0]],[[0,0],[(z1-z0)*.25,0],[(z1-z0)*.25,6],[0,6]],[1,0,0]]);
-  t.push([[[x0,y0,z0],[x1,y0,z0],[x1,y0,z1],[x0,y0,z1]],[[0,0],[1,0],[1,1],[0,1]],[0,-1,0]]);
+  t.push([[[x0,y0,z0],[x1,y0,z0],[x1,y0,z1],[x0,y0,z1]],[[0,0],[1,0],[1,1],[0,1]],[0,-1,0]]);t.push([[[x0,y1,z0],[x1,y1,z0],[x1,y1,z1],[x0,y1,z1]],[[0,0],[1,0],[1,1],[0,1]],[0,1,0]]);
   return meshStr(e,M_edge)+meshStr(t,M_paper)};
  const by0=-T/2-.006,by1=-.006;
- const jacketStr=anim('Jacket',anim('JF',meshStr([fpan],M_cover)+boxQ(-W+.01,-.01,by0,by1,-H/2,H/2))+anim('JS',meshStr([span],M_cover)+boxQ(0,T,by0,by1,-H/2,H/2)+anim('JB',meshStr([bpan],M_cover)+boxQ(.01,W-.01,by0,by1,-H/2,H/2))));
+ const jacketStr=anim('Jacket',anim('JK',anim('JB',meshStr([bpan],M_cover)+boxQ(.01,W-.01,-T/2,-.006,-H/2,H/2))+anim('JS',meshStr([span],M_cover)+boxQ(0,T,.006,T/2,-H/2,H/2)+anim('JF',meshStr([fpan],M_cover)+boxQ(.01,W-.01,.006,T/2,-H/2,H/2)))));
  const inner_=anim('Inner',leavesStr+slabStr+spine+back+jacketStr);
  const bookStr=anim('Book',inner_);
  const cq=[[[-.5,0.006,-.5],[.5,0.006,-.5],[.5,0.006,.5],[-.5,0.006,.5]],[[0,0],[1,0],[1,1],[0,1]],[0,1,0]];
