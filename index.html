@@ -43,6 +43,8 @@ h1{margin:4px 0 0;font-size:clamp(22px,3.4vw,32px);line-height:1.1;font-weight:7
 #flip button:hover{background:rgba(255,255,255,.08)}
 #flip .pg{font-size:12px;color:var(--mute);min-width:96px;text-align:center;white-space:nowrap}
 #flip .open{background:rgba(255,255,255,.1)}
+#flip button.on{background:var(--acc);color:#fff}
+@media(max-width:420px){#flip .pg{min-width:0;font-size:11px}#flip button{padding:0 9px}}
 /* sheet */
 #sheet{position:fixed;z-index:7;left:0;right:0;bottom:0;border-radius:20px 20px 0 0;border-bottom:0;display:flex;flex-direction:column;max-height:52vh;transition:transform .3s}
 #sheet .grip{height:18px;display:grid;place-items:center;cursor:pointer}
@@ -158,6 +160,8 @@ body.armode #sheet,body.armode #flip,body.armode .fab,body.armode header.hd,body
   <span class="pg" id="pgTxt">封面</span>
   <button id="nextBtn" aria-label="下一頁"><span class="lbl">下一頁</span> ›</button>
   <button id="openBtn" class="open">翻開</button>
+  <button id="backBtn">封底</button>
+  <button id="unfoldBtn">攤開</button>
 </div>
 
 <button id="arBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="4"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5"/></svg>AR 實境</button>
@@ -272,7 +276,7 @@ body.armode #sheet,body.armode #flip,body.armode .fab,body.armode header.hd,body
 
 <div id="arbar"><button class="round glass" id="arExit" aria-label="離開 AR"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg></button><span class="chip glass" id="arMode">AR・1:1</span><button class="round glass" id="arShot" aria-label="拍照"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg></button></div>
 <div id="arhint" class="glass"></div>
-<div id="xrov"><div id="xrhint" class="glass" style="position:fixed;left:50%;bottom:40px;transform:translateX(-50%);padding:10px 18px;border-radius:999px;font:14px 'Noto Sans TC',sans-serif;color:#fff">移動手機找到桌面，點一下放置書本</div><button id="xrExit" class="glass" style="position:fixed;top:16px;left:16px;width:44px;height:44px;border-radius:50%;color:#fff">✕</button></div>
+<div id="xrov"><div id="xrctl" style="position:fixed;left:50%;bottom:28px;transform:translateX(-50%);display:flex;gap:6px;font:14px 'Noto Sans TC',sans-serif"><button data-x="prev" class="glass" style="height:48px;min-width:52px;padding:0 12px;border-radius:999px;color:#fff">‹</button><button data-x="open" class="glass" style="height:48px;min-width:52px;padding:0 12px;border-radius:999px;color:#fff">翻開</button><button data-x="next" class="glass" style="height:48px;min-width:52px;padding:0 12px;border-radius:999px;color:#fff">›</button><button data-x="back" class="glass" style="height:48px;min-width:52px;padding:0 12px;border-radius:999px;color:#fff">封底</button><button data-x="unfold" class="glass" style="height:48px;min-width:52px;padding:0 12px;border-radius:999px;color:#fff">攤開</button></div><div id="xrhint" class="glass" style="position:fixed;left:50%;bottom:96px;transform:translateX(-50%);padding:10px 18px;border-radius:999px;font:14px 'Noto Sans TC',sans-serif;color:#fff">移動手機找到桌面，點一下放置書本</div><button id="xrExit" class="glass" style="position:fixed;top:16px;left:16px;width:44px;height:44px;border-radius:50%;color:#fff">✕</button></div>
 
 <script type="module">
 import * as THREE from 'three';
@@ -400,7 +404,7 @@ function insideCover(W,H){const c=pageCanvas(W,H),g=c.getContext('2d');g.fillSty
 
 /* ---------- book model ---------- */
 const NS=36, TC=0.03;
-let leaves=[], blocks={}, spineG=null, backPlane=null, coverMat=null, pageMats=[], texCache=[];
+let leaves=[], spineG=null, backPlane=null, coverMat=null, pageMats=[], texCache=[];
 const ease=t=>t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;
 function texFrom(src){const t=src.isTexture?src:new THREE.Texture(src);t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=maxAniso;t.needsUpdate=true;texCache.push(t);return t}
 function region(){ // returns {map(which,u,v)->[U,V]} in art texture space
@@ -417,7 +421,7 @@ function fitInfo(){const aw=ART.w,ah=ART.h,frontOnly=aw<ah*1.15,pw=frontOnly?aw:
  if(S.fit==='cover'){const s=Math.max(sx,sy);const cw=(pw*s-S.W)/2,chh=(ah*s-S.H)/2;return{ok:false,txt:head+`以「等比填滿」套用：放大 ${(s*100).toFixed(1)}%，`+(cw>.01?`左右各裁約 ${cw.toFixed(2)} cm`:`上下各裁約 ${chh.toFixed(2)} cm`)+'。正式出版請依此開本重新排版。'}}
  return{ok:false,txt:head+`以「拉伸」套用：水平 ${(sx*100).toFixed(1)}%、垂直 ${(sy*100).toFixed(1)}%，字形會略微變形。`}}
 function leafGeo(){const n=(NS+1)*2;const pos=new THREE.BufferAttribute(new Float32Array(n*3),3);pos.setUsage(THREE.DynamicDrawUsage);
- const mk=(back)=>{const g=new THREE.BufferGeometry();g.setAttribute('position',pos);g.setAttribute('uv',new THREE.BufferAttribute(new Float32Array(n*2),2));const idx=[];for(let i=0;i<NS;i++){const a=i*2,b=(i+1)*2,c=a+1,d=b+1;back?idx.push(a,c,b,b,c,d):idx.push(a,b,c,b,d,c)}g.setIndex(idx);return g};
+ const mk=(back)=>{const g=new THREE.BufferGeometry();g.userData.dyn=true;g.setAttribute('position',pos);g.setAttribute('uv',new THREE.BufferAttribute(new Float32Array(n*2),2));const idx=[];for(let i=0;i<NS;i++){const a=i*2,b=(i+1)*2,c=a+1,d=b+1;back?idx.push(a,c,b,b,c,d):idx.push(a,b,c,b,d,c)}g.setIndex(idx);return g};
  return{pos,f:mk(false),b:mk(true)}}
 function setUV(g,fn){const uv=g.attributes.uv;for(let i=0;i<=NS;i++)for(let r=0;r<2;r++){const d=i/NS,v=r===0?1:0;let [U,V]=fn(d,v);uv.setXY(i*2+r,U,V)}uv.needsUpdate=true}
 function disposeBook(){inner.traverse(o=>{if(o.geometry)o.geometry.dispose()});inner.clear();pageMats.forEach(m=>m.dispose());pageMats=[];texCache.forEach(t=>{if(t!==artTex)t.dispose()});texCache=[]}
@@ -444,46 +448,108 @@ function buildBook(keepState=true){
   if(i===L){leaves[i].pos=leaves[i].target=0}});
  // y positions
  let acc=0;leaves.forEach(l=>{l.yL=T-acc;acc+=l.t});acc=0;leaves.forEach(l=>{acc+=l.t;l.yR=acc});
- // blocks
- const mk=(side)=>{const m=new THREE.Mesh(new THREE.BoxGeometry(W,1,H),[new THREE.MeshStandardMaterial({map:edgeTex,roughness:.95}),new THREE.MeshStandardMaterial({map:edgeTex,roughness:.95}),new THREE.MeshStandardMaterial({color:tint,roughness:.95}),new THREE.MeshStandardMaterial({color:tint,roughness:.95}),new THREE.MeshStandardMaterial({map:edgeTex,roughness:.95}),new THREE.MeshStandardMaterial({map:edgeTex,roughness:.95})]);m.castShadow=m.receiveShadow=true;m.userData.side=side;inner.add(m);pageMats.push(...m.material);return m};
- blocks.L=mk('L');blocks.R=mk('R');blocks.L.position.x=-W/2;blocks.R.position.x=W/2;
+ LAM=Math.min(3.5,Math.max(.6,T*1.3));
+ // perfect-bound page-block slabs (curved wedge that follows the gutter arc)
+ const edgeMat=new THREE.MeshStandardMaterial({map:edgeTex,color:0xf1ece2,roughness:.95});pageMats.push(edgeMat);
+ slabs.L=makeSlab('L',edgeMat);slabs.R=makeSlab('R',edgeMat);
  // back cover (bottom face of left block), facing down
  const bg=new THREE.PlaneGeometry(W,H,1,1);bg.rotateX(Math.PI/2);bg.translate(-W/2,TC/2,0);
  {const uv=bg.attributes.uv,p=bg.attributes.position;for(let k=0;k<p.count;k++){const d=-p.getX(k)/W,v=p.getZ(k)<0?1:0;const [a,b]=R('back',U(d),v);uv.setXY(k,a,b)}}
  backPlane=new THREE.Mesh(bg,coverMat);backPlane.userData.side='L';backPlane.castShadow=true;inner.add(backPlane);
  // spine: plane in y-z at x=0, facing +x, pivot at y=0
  spineG=new THREE.Group();inner.add(spineG);
- const sg=new THREE.PlaneGeometry(H,T,1,1);sg.rotateY(Math.PI/2);sg.translate(0.02,T/2,0); // after rotateY: plane spans z (from x) and y
+ const sg=new THREE.PlaneGeometry(H,T,1,1);sg.rotateY(Math.PI/2);sg.translate(0.02,T/2,0);
  {const uv=sg.attributes.uv,p=sg.attributes.position;for(let k=0;k<p.count;k++){const u=1-p.getY(k)/T,v=p.getZ(k)<0?1:0;const[a,b]=R('spine',U(u),v);uv.setXY(k,a,b)}}
  const sm=new THREE.Mesh(sg,coverMat);sm.userData.side='spine';sm.castShadow=true;spineG.add(sm);
- // contact shadow & dims
+ // unfold jacket: front | spine | back as one hinged sheet
+ buildJacket(R,U,tint);
  contact.scale.set(W*1.15,H*1.12,1);
  mirror.scale.x=inv?-1:1;
- buildDims();buildOutlines();updateBook(0,true);updateUI();
+ buildDims();buildOutlines();updateBook(0,true);applyPose();updateUI();
 }
-function layLeaf(l,theta,bend,dir,py){const p=l.g.pos;const dl=S.W/NS;let x=0,y=py;
- for(let i=0;i<=NS;i++){p.setXYZ(i*2,x,y,-S.H/2);p.setXYZ(i*2+1,x,y,S.H/2);if(i<NS){let a=theta+dir*bend*Math.pow(i/NS,1.4);a=Math.min(Math.PI,Math.max(0,a));x+=Math.cos(a)*dl;y+=Math.sin(a)*dl}}
+let LAM=1.3;const GY=TC*1.2;let slabs={},jacket=null;
+function planeUp(w,h,x0,uvFn){const g=new THREE.PlaneGeometry(w,h,1,1);g.rotateX(-Math.PI/2);g.translate(x0+w/2,0,0);const p=g.attributes.position,uv=g.attributes.uv;for(let k=0;k<p.count;k++){const[a,b]=uvFn(p.getX(k),p.getZ(k)<0?1:0);uv.setXY(k,a,b)}return g}
+function flipGeo(g){const c=g.clone();const ix=c.index.array;for(let i=0;i<ix.length;i+=3){const t=ix[i+1];ix[i+1]=ix[i+2];ix[i+2]=t}c.index.needsUpdate=true;c.computeVertexNormals();return c}
+function buildJacket(R,U,tint){const{W,H,T}=S;jacket={g:new THREE.Group(),sp:new THREE.Group(),bp:new THREE.Group()};inner.add(jacket.g);
+ const inMat=new THREE.MeshStandardMaterial({color:tint,roughness:.8});pageMats.push(inMat);
+ const add=(parent,geo)=>{const a=new THREE.Mesh(geo,coverMat),b=new THREE.Mesh(flipGeo(geo),inMat);[a,b].forEach(m=>{m.castShadow=true;m.receiveShadow=true;m.userData.side='J';parent.add(m)});return a};
+ jacket.fg=new THREE.Group();jacket.g.add(jacket.fg);jacket.front=add(jacket.fg,planeUp(W,H,-W,(x,v)=>R('front',U(1+x/W),v)));
+ jacket.g.add(jacket.sp);add(jacket.sp,planeUp(T,H,0,(x,v)=>R('spine',U(x/T),v)));
+ jacket.sp.add(jacket.bp);jacket.bp.position.x=T;add(jacket.bp,planeUp(W,H,0,(x,v)=>R('back',U(x/W),v)));
+ jacket.g.visible=false}
+function makeSlab(side,mat){const n=NS+1,cnt=n*4+8;const pos=new THREE.BufferAttribute(new Float32Array(cnt*3),3),uv=new THREE.BufferAttribute(new Float32Array(cnt*2),2);pos.setUsage(THREE.DynamicDrawUsage);uv.setUsage(THREE.DynamicDrawUsage);
+ const g=new THREE.BufferGeometry();g.userData.dyn=true;g.setAttribute('position',pos);g.setAttribute('uv',uv);const idx=[];const L=side==='L';
+ const quad=(a,b,c,d,fwd)=>fwd?idx.push(a,b,c,a,c,d):idx.push(a,d,c,a,c,b);
+ // head: verts [0..2n) as B_i=2i, T_i=2i+1 ; tail offset 2n
+ for(let i=0;i<NS;i++){const B=2*i,Tt=2*i+1,B2=2*i+2,T2=2*i+3;quad(B,B2,T2,Tt,L);const o=2*n;quad(o+B,o+B2,o+T2,o+Tt,!L)}
+ const f=4*n;quad(f,f+1,f+3,f+2,L);quad(f+4,f+5,f+7,f+6,!L);
+ g.setIndex(idx);const m=new THREE.Mesh(g,mat);m.castShadow=m.receiveShadow=true;m.userData.side=side;inner.add(m);m.userData.slab={pos,uv,n};return m}
+const _xb=new Float32Array(NS+1),_yb=new Float32Array(NS+1),_xt=new Float32Array(NS+1),_yt=new Float32Array(NS+1);
+function setSlab(m,side,top,bottomY){const{pos,uv,n}=m.userData.slab;const H=S.H,sx=side==='L'?-1:1,dl=S.W/NS;
+ for(let i=0;i<n;i++){_xb[i]=sx*i*dl;_yb[i]=bottomY;_xt[i]=top.x[i];_yt[i]=Math.max(bottomY,top.y[i])}
+ const put=(k,x,y,z,u)=>{pos.setXYZ(k,x,y,z);uv.setXY(k,u,y*28)};
+ for(let i=0;i<n;i++){const u=i/NS*S.W*.25;put(2*i,_xb[i],_yb[i],-H/2,u);put(2*i+1,_xt[i],_yt[i],-H/2,u);put(2*n+2*i,_xb[i],_yb[i],H/2,u);put(2*n+2*i+1,_xt[i],_yt[i],H/2,u)}
+ const f=4*n,N=NS;put(f,_xb[N],_yb[N],-H/2,0);put(f+1,_xb[N],_yb[N],H/2,H*.25);put(f+2,_xt[N],_yt[N],-H/2,0);put(f+3,_xt[N],_yt[N],H/2,H*.25);
+ put(f+4,_xb[0],_yb[0],-H/2,0);put(f+5,_xb[0],_yb[0],H/2,H*.25);put(f+6,_xt[0],_yt[0],-H/2,0);put(f+7,_xt[0],_yt[0],H/2,H*.25);
+ // gutter quad must face toward spine (+x for L): reuse winding of fore-edge mirrored
+ pos.needsUpdate=uv.needsUpdate=true;m.geometry.computeVertexNormals();m.geometry.computeBoundingSphere()}
+// profile of one page: pivot at gutter (0,py); hinge arc of strength alpha decays over LAM; bend = flip curl
+const PX=new Float32Array(NS+1),PY=new Float32Array(NS+1);
+function profile(theta,py,alpha,bend,dir,out){const dl=S.W/NS,c=Math.cos(theta);let x=0,y=py;
+ for(let i=0;i<=NS;i++){out.x[i]=x;out.y[i]=y;if(i<NS){const d=(i+.5)*dl;let a=theta+alpha*Math.exp(-d/LAM)*c+dir*bend*Math.pow(i/NS,1.4);a=Math.min(Math.PI,Math.max(0,a));x+=Math.cos(a)*dl;y+=Math.sin(a)*dl}}return out}
+function riseOf(theta,alpha){const dl=S.W/NS,c=Math.cos(theta);let y=0;for(let i=0;i<NS;i++){const d=(i+.5)*dl;let a=theta+alpha*Math.exp(-d/LAM)*c;a=Math.min(Math.PI,Math.max(0,a));y+=Math.sin(a)*dl}return y}
+function solveAlpha(theta,rise){if(Math.abs(rise)<1e-4)return 0;let lo=-1.5,hi=1.5;for(let k=0;k<16;k++){const m=(lo+hi)/2;(riseOf(theta,m)<rise)?lo=m:hi=m}return(lo+hi)/2}
+const TMP={x:PX,y:PY};
+function layLeaf(l,pts){const p=l.g.pos;for(let i=0;i<=NS;i++){p.setXYZ(i*2,pts.x[i],pts.y[i],-S.H/2);p.setXYZ(i*2+1,pts.x[i],pts.y[i],S.H/2)}
  p.needsUpdate=true;l.g.f.computeVertexNormals();l.g.b.computeVertexNormals();l.g.f.computeBoundingSphere();l.g.b.computeBoundingSphere()}
-let speed=1;
+let speed=1;const LIFT=0.012;
+function poseLeaves(){const o=ease(leaves[0].pos);
+ let f=leaves.findIndex(l=>l.pos===0&&l.target===0);if(f<0)f=leaves.length-1;
+ let k=-1;leaves.forEach((l,i)=>{if(l.pos===1&&l.target===1)k=i});
+ leaves.forEach((l,i)=>{const anim=l.pos>0&&l.pos<1||l.pos!==l.target;const show=anim||i===f||i===k;l.front.visible=l.back.visible=show;if(!show)return;
+  const yl=l.yL+LIFT,yr=l.yR+LIFT;
+  if(!anim){const left=l.pos<1;const yRest=left?yl:yr;const py=yRest+(GY-yRest)*o;const th=left?Math.PI:0;layLeaf(l,profile(th,py,solveAlpha(th,yRest-py),0,1,TMP));return}
+  const e=ease(l.pos),th=Math.PI*(1-e);const base=yl+(yr-yl)*e;const py=base+(GY-base)*o;
+  const aL=solveAlpha(Math.PI,yl-py),aR=solveAlpha(0,yr-py);const bend=1.05*Math.sin(Math.PI*e);
+  layLeaf(l,profile(th,py,aL+(aR-aL)*e,bend,(l.dir||1)>0?1:-1,TMP))});
+ // slabs
+ {const fl=leaves[f];const top=fl.yL-fl.t;const py=top+(GY-top)*o;profile(Math.PI,py,solveAlpha(Math.PI,top-py),0,1,TMP);setSlab(slabs.L,'L',TMP,TC);slabs.L.visible=top>TC+.001}
+ if(k>=1){const kl=leaves[k];const top=kl.yR-kl.t;const py=top+(GY-top)*o;profile(0,py,solveAlpha(0,top-py),0,1,TMP);setSlab(slabs.R,'R',TMP,0);slabs.R.visible=true}else slabs.R.visible=false;
+ spineG.rotation.z=-Math.PI/2*o;spineG.visible=o<.999;
+ return o}
 function updateBook(dt,force){
  if(!leaves.length)return;let moving=false;
  leaves.forEach(l=>{if(l.pos!==l.target){moving=true;const s=dt*speed/0.85;l.dir=l.target>l.pos?1:-1;l.pos=l.target>l.pos?Math.min(l.target,l.pos+s):Math.max(l.target,l.pos-s)}});
  if(!moving&&!force)return;
- let f=leaves.findIndex(l=>l.pos===0&&l.target===0);if(f<0)f=leaves.length-1;
- let k=-1;leaves.forEach((l,i)=>{if(l.pos===1&&l.target===1)k=i});
- leaves.forEach((l,i)=>{const anim=l.pos>0&&l.pos<1||l.pos!==l.target;const show=anim||i===f||i===k;l.front.visible=l.back.visible=show;if(!show)return;
-  const e=ease(l.pos);const theta=Math.PI*(1-e);const bend=anim?0.95*Math.sin(Math.PI*e):0;const py=(anim?l.yL+(l.yR-l.yL)*e:(l.pos>=1?l.yR:l.yL))+0.012*(1+i*0.02);
-  layLeaf(l,theta,bend,(l.dir||1)>0?1:-1,py)});
- const fl=leaves[f];const hL=Math.max(.001,fl.yL-fl.t-TC);blocks.L.scale.y=hL;blocks.L.position.y=TC+hL/2;
- if(k>=1){const kl=leaves[k];const hR=Math.max(.001,kl.yR-kl.t);blocks.R.visible=true;blocks.R.scale.y=hR;blocks.R.position.y=hR/2}else blocks.R.visible=false;
- edgeTex.repeat.y=6;
- const o=ease(leaves[0].pos);spineG.rotation.z=-Math.PI/2*o;spineG.visible=o<.999;
+ const o=poseLeaves();
  inner.position.x=S.W/2*(1-o);
+ contact.scale.x=S.W*(1.15+o);
  dimsG.visible=showDims&&o<.02;
  updatePageLabel()}
-function flipNext(){const i=leaves.findIndex(l=>l.target===0&&l.flippable);if(i<0||i>=leaves.length-1){toast('已到最後一頁');return}leaves[i].target=1;leaves[i].dir=1;stopCam()}
-function flipPrev(){let i=-1;leaves.forEach((l,j)=>{if(l.target===1)i=j});if(i<0)return;leaves[i].target=0;leaves[i].dir=-1;stopCam()}
-function openClose(){if(leaves[0].target===0){flipNext();return}const on=leaves.map((l,i)=>l.target===1?i:-1).filter(i=>i>=0).reverse();speed=3;on.forEach((i,n)=>setTimeout(()=>{leaves[i].target=0;leaves[i].dir=-1},n*110));setTimeout(()=>speed=1,on.length*110+900)}
+/* pose: flip-over (back cover up) & unfold (cover sheet laid flat) */
+let flipOver=0,flipOverT=0,unfold=0,unfoldT=0;
+function applyPose(){const{W,T}=S;const e=ease(Math.min(1,Math.max(0,unfold)));const u=unfold>0.0005;
+ if(jacket){jacket.g.visible=u;
+  if(u)[...leaves.flatMap(l=>[l.front,l.back]),slabs.L,slabs.R,backPlane,spineG].forEach(m=>{if(m)m.visible=false});
+  else if(jacket.wasU)updateBook(0,true);
+  jacket.wasU=u;
+  const h=T*(1-e)+.02+.25*T*Math.sin(Math.PI*e);
+  jacket.fg.position.y=h;jacket.sp.position.set(0,h,0);jacket.sp.rotation.z=-Math.PI/2*(1-e);jacket.bp.rotation.z=Math.PI*1.5*(1-e);
+  if(u)inner.position.x=W/2+(-T/2-W/2)*e;
+  contact.scale.x=u?(W*2+T)*1.08*e+W*1.15*(1-e):contact.scale.x}
+ const f=ease(Math.min(1,Math.max(0,flipOver)));bookRoot.rotation.z=Math.PI*f;bookRoot.position.y=(S.T*f+Math.sin(Math.PI*f)*S.W*0.35)*(1-e)}
+function runFlipOver(dt){const k=Math.min(1,dt*1.6);let ch=false;
+ if(flipOver!==flipOverT){flipOver+=Math.sign(flipOverT-flipOver)*Math.min(Math.abs(flipOverT-flipOver),k);ch=true}
+ if(unfold!==unfoldT){unfold+=Math.sign(unfoldT-unfold)*Math.min(Math.abs(unfoldT-unfold),k*.8);ch=true}
+ if(ch)applyPose()}
+function anyOpen(){return leaves.some(l=>l.target===1)}
+function toggleBack(){if(unfoldT){unfoldT=0;setTimeout(()=>flipOverT=1,700)}else if(anyOpen()){openClose();setTimeout(()=>flipOverT=1,900)}else flipOverT=flipOverT?0:1;updateModeBtns()}
+function toggleUnfold(){if(unfoldT){unfoldT=0}else{const d=(anyOpen()?900:0)+(flipOverT?700:0);if(anyOpen())openClose();flipOverT=0;setTimeout(()=>{unfoldT=1;updateModeBtns()},d)}updateModeBtns()}
+function resetPose(){if(flipOverT||unfoldT){flipOverT=0;unfoldT=0;updateModeBtns();return true}return false}
+function updateModeBtns(){const b=$('#backBtn'),u=$('#unfoldBtn');if(b)b.classList.toggle('on',!!flipOverT);if(u)u.classList.toggle('on',!!unfoldT)}
+function flipNext(){if(resetPose())return;const i=leaves.findIndex(l=>l.target===0&&l.flippable);if(i<0||i>=leaves.length-1){toast('已到最後一頁');return}leaves[i].target=1;leaves[i].dir=1;stopCam()}
+function flipPrev(){if(resetPose())return;let i=-1;leaves.forEach((l,j)=>{if(l.target===1)i=j});if(i<0)return;leaves[i].target=0;leaves[i].dir=-1;stopCam()}
+function openClose(){if(resetPose()&&!anyOpen())return;if(leaves[0].target===0){flipNext();return}const on=leaves.map((l,i)=>l.target===1?i:-1).filter(i=>i>=0).reverse();speed=3;on.forEach((i,n)=>setTimeout(()=>{leaves[i].target=0;leaves[i].dir=-1},n*110));setTimeout(()=>speed=1,on.length*110+900)}
 function updatePageLabel(){const s=leaves.filter(l=>l.target===1).length;const total=(leaves.length-2)*2;let t;
  if(s===0)t='封面';else{const a=s===1?'封面裡':'p'+(2*s-2),b=s<leaves.length-1?'p'+(2*s-1):'—';t=S.bind==='R'?`${a}｜${b}`:`${b}｜${a}`}
  $('#pgTxt').textContent=t+(s?`　/ ${total} 頁`:'');$('#openBtn').textContent=s?'闔上':'翻開'}
@@ -544,8 +610,7 @@ function view(v){const{W,H,T}=S;const D=Math.max(W,H)*1.9;const open=leaves[0]?.
  if(v==='spine'){if(open)openClose();flyTo([m*(W/2+D*.55),D*.25,D*.1],[m*W/2,T/2,0])}
  if(v==='top')flyTo([0,D*1.05,0.01],[0,0,0])}
 // "back": rotate book over to show back cover
-let flipOver=0,flipOverT=0;
-function runFlipOver(dt){const goal=flipOverT;flipOver+= (goal-flipOver)*Math.min(1,dt*4);bookRoot.rotation.z=Math.PI*flipOver;bookRoot.position.y=S.T*flipOver+ (Math.sin(Math.PI*flipOver)*S.W*0.35)}
+
 
 /* ---------- loop ---------- */
 const clock=new THREE.Clock();
@@ -583,7 +648,7 @@ function renderOpts(){
  opts('#lightGrid',LIGHTS,'light',S.light,v=>{S.light=v;applyLight();renderOpts()});
  opts('#bgGrid',photoTex?{...BGS,photo:{n:'我的照片'}}:BGS,'bg',S.bg,v=>{S.bg=v;applyBg();renderOpts()});
  opts('#camGrid',CAMS,'cam',camMode,v=>{tweens.length=0;if(v==='stop')stopCam();else setCam(v)});
- opts('#viewGrid',VIEWS,'view',null,v=>{flipOverT=v==='back'?1:0;if(v==='back'){if(leaves[0].target)openClose();flyTo([S.W*.3,S.H*1.5,S.H*1.1],[0,S.T,0])}else view(v)});
+ opts('#viewGrid',VIEWS,'view',null,v=>{if(v==='back'){if(!flipOverT)toggleBack();flyTo([S.W*.3,S.H*1.5,S.H*1.1],[0,S.T,0])}else{resetPose();view(v)}});
  $('#dimBtn').classList.toggle('pri',showDims);$('#outBtn').classList.toggle('pri',showOut)}
 $('#sizeGrid').onclick=e=>{const b=e.target.closest('.opt');if(!b)return;const s=SIZES.find(x=>x.id===b.dataset.v);Object.assign(S,{size:s.id,W:s.w,H:s.h});buildBook(false);renderOpts();frameBook()};
 ['#cw','#ch'].forEach(id=>$(id).onchange=()=>{const w=+$('#cw').value,h=+$('#ch').value;if(w>=5&&h>=5){Object.assign(S,{size:'custom',W:w,H:h});buildBook(false);renderOpts();frameBook()}});
@@ -603,7 +668,7 @@ let toastT;function toast(t){const el=$('#toast');el.textContent=t;el.classList.
 $('#prevBtn').onclick=()=>S.bind==='R'?flipPrev():flipNext();
 $('#nextBtn').onclick=()=>S.bind==='R'?flipNext():flipPrev();
 // In a right-bound book the "next" page lies on the left; arrow labels follow reading direction
-$('#openBtn').onclick=openClose;
+$('#openBtn').onclick=openClose;$('#backBtn').onclick=toggleBack;$('#unfoldBtn').onclick=toggleUnfold;
 let panMode=false;$('#moveBtn').onclick=()=>{panMode=!panMode;controls.mouseButtons.LEFT=panMode?THREE.MOUSE.PAN:THREE.MOUSE.ROTATE;controls.touches.ONE=panMode?THREE.TOUCH.PAN:THREE.TOUCH.ROTATE;$('#moveBtn').classList.toggle('on',panMode);toast(panMode?'移動模式：拖曳平移畫面':'旋轉模式：拖曳 360° 旋轉')};
 document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>b.closest('.modal').classList.remove('on'));
 document.querySelectorAll('.modal').forEach(m=>m.onclick=e=>{if(e.target===m)m.classList.remove('on')});
@@ -691,7 +756,56 @@ navigator.xr?.isSessionSupported?.('immersive-ar').then(v=>arSupport.xr=v).catch
 let DEFAULT_KEY=null,ready=null;const staticCache={};
 function modelKey(){return JSON.stringify([S.size,S.W,S.H,S.T,S.bind,S.fit,S.fin,ART.name,ART.w,ART.h,ART.spine,ART.side])}
 async function hasStatic(f){if(inSandbox)return false;if(f in staticCache)return staticCache[f];try{const r=await fetch(f,{method:'HEAD',cache:'no-store'});staticCache[f]=r.ok}catch{staticCache[f]=false}return staticCache[f]}
-async function buildUSDZ(){const {USDZExporter}=await import('three/addons/exporters/USDZExporter.js');const g=await exportTarget();return new USDZExporter().parseAsync(g,{maxTextureSize:2048})}
+async function buildUSDZ(){return buildARStatesUSDZ()}
+/* ---- AR export: baked contact shadow, snapshots, tap-to-advance states for iOS AR Quick Look ---- */
+const shadowTex=(()=>{const c=document.createElement('canvas');c.width=c.height=256;const g=c.getContext('2d');g.fillStyle='rgba(0,0,0,0)';g.fillRect(0,0,256,256);
+ g.filter='blur(14px)';g.fillStyle='rgba(0,0,0,.42)';g.fillRect(34,34,188,188);g.filter='blur(4px)';g.fillStyle='rgba(0,0,0,.38)';g.fillRect(44,44,168,168);g.filter='none';
+ const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;return t})();
+const shadowMatX=new THREE.MeshStandardMaterial({color:0x000000,map:shadowTex,transparent:true,roughness:1,metalness:0,depthWrite:false});
+function snapGroup(name,scaled){bookRoot.updateMatrixWorld(true);const c=bookRoot.clone(true);c.position.copy(bookRoot.position);c.rotation.copy(bookRoot.rotation);
+ const rm=[];c.traverse(o=>{if(o.name==='contact'||o.isSprite||o.isLine||!o.visible)rm.push(o)});rm.forEach(o=>o.removeFromParent());
+ c.traverse(o=>{if(o.isMesh){if(Array.isArray(o.material))o.material=o.material[0];if(o.geometry.userData.dyn)o.geometry=o.geometry.clone()}});
+ const w=new THREE.Group();w.name=name;w.add(c);w.updateMatrixWorld(true);
+ const bb=new THREE.Box3().setFromObject(c);const m=1.6,sw=bb.max.x-bb.min.x+2*m,sd=bb.max.z-bb.min.z+2*m;
+ const sh=new THREE.Mesh(new THREE.PlaneGeometry(1,1).rotateX(-Math.PI/2),shadowMatX);sh.scale.set(sw*1.0,1,sd);sh.position.set((bb.min.x+bb.max.x)/2,0.004,(bb.min.z+bb.max.z)/2);
+ const hgt=Math.max(0,bb.min.y);sh.visible=hgt<1.5;w.add(sh);
+ if(scaled){const r=new THREE.Group();r.add(w);r.scale.setScalar(0.01);r.updateMatrixWorld(true);return r}return w}
+function saveBookState(){return{p:leaves.map(l=>[l.pos,l.target,l.dir]),fo:flipOver,foT:flipOverT,uf:unfold,ufT:unfoldT}}
+function loadBookState(st){leaves.forEach((l,i)=>{[l.pos,l.target,l.dir]=st.p[i]});flipOver=st.fo;flipOverT=st.foT;unfold=st.uf;unfoldT=st.ufT;if(jacket)jacket.wasU=true;updateBook(0,true);applyPose()}
+function setInstant({pos=[],tgt=null,dir=1,fo=0,uf=0}){leaves.forEach((l,i)=>{const p=pos[i]||0;l.pos=p;l.target=tgt?(tgt[i]||0):(p>0?1:0);l.dir=dir});flipOver=flipOverT=fo;unfold=unfoldT=uf;if(jacket)jacket.wasU=true;updateBook(0,true);applyPose()}
+async function buildARStatesUSDZ(){const {USDZExporter}=await import('three/addons/exporters/USDZExporter.js');const fflate=await import('three/addons/libs/fflate.module.js');
+ const saved=saveBookState();const root=new THREE.Group();const groups=[];const FR=5,DT=0.055;
+ const snap=(name,st)=>{setInstant(st);const g=snapGroup(name);root.add(g);groups.push(g);return name};
+ const flips=Math.max(1,Math.min(leaves.length-2,4));const ones=n=>Array.from({length:n},()=>1);
+ const chain=[];let rest=snap('S0',{});
+ for(let j=0;j<flips;j++){const fr=[];for(let k=1;k<=FR;k++){const pos=ones(j);pos[j]=k/(FR+1);const tgt=ones(j+1);fr.push(snap(`F${j}_${k}`,{pos,tgt}))}const nx=snap(`S${j+1}`,{pos:ones(j+1)});chain.push([rest,fr,nx]);rest=nx}
+ const close=[];for(let k=1;k<=FR;k++){const pos=ones(flips).map(()=>1-k/(FR+1));close.push(snap(`C_${k}`,{pos,tgt:[],dir:-1}))}
+ const over=[];for(let k=1;k<=FR+2;k++)over.push(snap(`O_${k}`,{fo:k/(FR+3)}));const back=snap('SB',{fo:1});chain.push([rest,[...close,...over],back]);
+ const unf=[];for(let k=1;k<=FR+3;k++)unf.push(snap(`U_${k}`,{uf:k/(FR+4)}));const flat=snap('SU',{uf:1});chain.push([back,[...over].reverse().concat(unf),flat]);
+ chain.push([flat,[...unf].reverse(),'S0']);
+ loadBookState(saved);
+ // collect mesh ids per group (exporter writes Object_<id>)
+ const ids={};groups.forEach(g=>{ids[g.name]=[];g.traverseVisible(o=>{if(o.isMesh)ids[g.name].push(o.id)})});
+ const raw=await new USDZExporter().parseAsync(root,{maxTextureSize:2048});
+ const files=fflate.unzipSync(new Uint8Array(raw));let usda=fflate.strFromU8(files['model.usda']);
+ const matIdx=usda.indexOf('def "Materials"');const endIdx=usda.lastIndexOf('\n\t\t}\n\t}\n}',matIdx);
+ const re=/def Xform "Object_(\d+)"/g;const starts=[];let mm;while((mm=re.exec(usda))&&mm.index<endIdx)starts.push([mm.index,+mm[1]]);
+ const blocks={};starts.forEach(([st,id],n)=>{blocks[id]=usda.slice(st,n+1<starts.length?starts[n+1][0]:endIdx)});
+ const head=usda.slice(0,starts[0][0]),tail=usda.slice(endIdx);const base='/Root/Scenes/Scene/';
+ const P=(g)=>ids[g].map(id=>`<${base}${g}/Object_${id}>`).join(', ');
+ let body='';groups.forEach((g,n)=>{body+=`def Xform "${g.name}"\n{\n${n===0?'':'token visibility = "invisible"\n'}${ids[g.name].map(id=>blocks[id]||'').join('')}\n}\n`});
+ let uid=0;const vis=(g,show)=>{const id='V'+(uid++);return[id,`def Preliminary_Action "${id}"\n{\nrel affectedObjects = [ ${P(g)} ]\ndouble duration = 0\ntoken easeType = "none"\ntoken info:id = "Visibility"\ntoken motionType = "none"\ndouble moveDistance = 0\ntoken style = "basic"\ntoken type = "${show?'show':'hide'}"\n}\n`]};
+ const wait=d=>{const id='W'+(uid++);return[id,`def Preliminary_Action "${id}"\n{\ndouble duration = ${d}\ntoken info:id = "Wait"\n}\n`]};
+ const grp=(kids,type)=>{const id='G'+(uid++);return[id,`def Preliminary_Action "${id}"\n{\nrel actions = [ ${kids.map(k=>'<'+k[0]+'>').join(', ')} ]\ntoken info:id = "Group"\nbool loops = 0\nint performCount = 1\ntoken type = "${type}"\n${kids.map(k=>k[1]).join('')}}\n`]};
+ let beh='def Scope "Behaviors"\n{\n';chain.forEach(([a,fr,b],n)=>{const steps=[];const seq=[a,...fr,b];for(let k=1;k<seq.length;k++){steps.push(grp([vis(seq[k-1],false),vis(seq[k],true)],'parallel'));if(k<seq.length-1)steps.push(wait(DT))}
+  const act=grp(steps,'serial');beh+=`def Preliminary_Behavior "B${n}"\n{\nrel triggers = <Tap${n}>\nrel actions = <${act[0]}>\nuniform bool exclusive = 0\n\ndef Preliminary_Trigger "Tap${n}"\n{\nrel affectedObjects = [ ${P(a)} ]\ntoken info:id = "TapGesture"\n}\n\n${act[1]}}\n`});beh+='}\n';
+ usda=head+body+beh+tail;
+ // re-encode large opaque textures as JPEG
+ for(const fn of Object.keys(files)){if(!/^textures\/.*\.png$/.test(fn)||files[fn].length<150000)continue;if(fn.includes('Texture_'+shadowTex.id+'_'))continue;
+  try{const bmp=await createImageBitmap(new Blob([files[fn]],{type:'image/png'}));const cv=document.createElement('canvas');cv.width=bmp.width;cv.height=bmp.height;cv.getContext('2d').drawImage(bmp,0,0);const jb=await new Promise(r=>cv.toBlob(r,'image/jpeg',.88));const nf=fn.replace(/\.png$/,'.jpg');files[nf]=new Uint8Array(await jb.arrayBuffer());delete files[fn];usda=usda.split(fn.slice(9)).join(nf.slice(9))}catch(e){console.warn(e)}}
+ const out={'model.usda':fflate.strToU8(usda)};for(const k in files)if(k!=='model.usda')out[k]=files[k];
+ let off=0;for(const fn in out){const f=out[fn];off+=34+fn.length;const m64=off&63;if(m64!==4){out[fn]=[f,{extra:{12345:new Uint8Array(64-m64)}}]}off=f.length}
+ return fflate.zipSync(out,{level:0})}
 async function buildGLB(){const {GLTFExporter}=await import('three/addons/exporters/GLTFExporter.js');const g=await exportTarget();return new GLTFExporter().parseAsync(g,{binary:true,maxTextureSize:2048})}
 async function prepUSDZ(){const key=modelKey();if(ready?.key===key)return ready.url;let url;
  if(key===DEFAULT_KEY&&await hasStatic('textbook.usdz'))url='textbook.usdz';else{toast('正在依目前設定產生 AR 模型…');url=URL.createObjectURL(new Blob([await buildUSDZ()],{type:'model/vnd.usdz+zip'}))}
@@ -702,25 +816,25 @@ async function goAR(){
  if(inSandbox||inApp)return arModal();
  if(arSupport.ios){const key=modelKey();if(ready?.key===key){launchQL(ready.url);return}
   try{const url=await prepUSDZ();arModal(url)}catch(err){console.warn(err);toast('AR 模型產生失敗')}return}
- if(arSupport.android){if(modelKey()===DEFAULT_KEY&&await hasStatic('textbook.glb')){location.href=sceneViewerURL();return}if(arSupport.xr)return startXR()}
+ if(arSupport.android){if(arSupport.xr)return startXR();if(modelKey()===DEFAULT_KEY&&await hasStatic('textbook.glb')){location.href=sceneViewerURL();return}}
  arModal()}
 function arModal(qlURL){const items=[
- {k:'ios',t:'iPhone / iPad 原生 AR（推薦）',s:inSandbox?'需在正式網址以 Safari 開啟':inApp?'請先改用 Safari 開啟':arSupport.ios?'自動偵測桌面，1:1 尺寸、真實透視與環境光影':'請用 iPhone 或 iPad 的 Safari 開啟',ok:arSupport.ios&&!inSandbox&&!inApp,ql:qlURL},
+ {k:'ios',t:'iPhone / iPad 原生 AR（推薦・可翻頁）',s:inSandbox?'需在正式網址以 Safari 開啟':inApp?'請先改用 Safari 開啟':arSupport.ios?'自動貼合桌面；點書本即可翻開、翻頁、看封底、攤開封面':'請用 iPhone 或 iPad 的 Safari 開啟',ok:arSupport.ios&&!inSandbox&&!inApp,ql:qlURL},
  {k:'sv',t:'Android 原生 AR（Scene Viewer）',s:inSandbox?'需在正式網址以 Chrome 開啟':arSupport.android?'自動偵測桌面，1:1 尺寸、真實透視與環境光影（目前預設設定）':'請用 Android 手機的 Chrome 開啟',ok:arSupport.android&&!inSandbox&&!inApp},
- {k:'xr',t:'WebXR AR（Android Chrome）',s:inSandbox?'需在正式網址開啟':arSupport.xr?'偵測桌面後點一下放置；可即時反映目前的設定':'此裝置不支援 WebXR',ok:arSupport.xr&&!inSandbox},
+ {k:'xr',t:'WebXR AR（Android Chrome・可翻頁）',s:inSandbox?'需在正式網址開啟':arSupport.xr?'偵測桌面後點一下放置；畫面下方按鈕可翻頁、看封底、攤開':'此裝置不支援 WebXR',ok:arSupport.xr&&!inSandbox},
  {k:'photo',t:'照片實境',s:'拍一張桌面照片當背景，在照片上擺書（任何裝置可用）',ok:true},
  {k:'cam',t:'相機預覽（無空間追蹤）',s:'只把書疊在鏡頭畫面上，不會貼合桌面，僅供快速預覽',ok:arSupport.cam&&!inSandbox},
  {k:'zip',t:'下載 3D 模型包（USDZ＋GLB）',s:'匯入簡報、Reality Composer 或其他 AR 平台',ok:true}];
  $('#siteLink').hidden=!inSandbox;
  $('#arEnvNote').textContent=inSandbox?'claude.ai 檢視框架會封鎖相機與 AR，請按下方按鈕在正式網址開啟。':inApp?'你目前在 LINE／FB 等 App 的內建瀏覽器，無法啟動 AR。請點右上角「⋯」選「用瀏覽器開啟」（iPhone 選 Safari、Android 選 Chrome）。':'原生 AR 會自動偵測桌面，書本以 1:1 實際尺寸、正確透視放上，並依現場光線打光、產生落地陰影。';
- if(qlURL)$('#arEnvNote').textContent='AR 模型已就緒，按下方第一個選項進入 AR。';
+ if(qlURL)$('#arEnvNote').textContent='AR 模型已就緒。進入 AR 後書會自動貼合桌面（1:1、真實透視與光影）；點一下書本依序：翻開封面 → 翻頁 → 闔上翻到封底 → 攤開整張封面 → 回到封面。';
  items.sort((x,y)=>(y.ok-x.ok));
  $('#arList').innerHTML=items.map(i=>{const inner=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="4"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5"/></svg><div><b>${i.t}</b><small>${i.s}</small></div>`;
   return i.ql?`<a class="aropt" rel="ar" href="${i.ql}#allowsContentScaling=0" style="text-decoration:none;color:inherit"><img alt="" style="display:none">${inner}</a>`:`<button class="aropt" data-k="${i.k}" ${i.ok?'':'disabled'}>${inner}</button>`}).join('');$('#arModal').classList.add('on')}
 $('#arBtn').onclick=goAR;
 $('#arList').onclick=async e=>{const b=e.target.closest('.aropt');if(!b||b.disabled)return;if(b.tagName==='A'){setTimeout(()=>$('#arModal').classList.remove('on'),300);return}$('#arModal').classList.remove('on');const k=b.dataset.k;
  if(k==='xr')startXR();if(k==='cam')startCamAR();if(k==='photo'){setTab('bg');$('#bgIn').click()}if(k==='ios'){try{launchQL(await prepUSDZ())}catch{toast('AR 模型產生失敗')}}if(k==='sv'){if(modelKey()===DEFAULT_KEY&&await hasStatic('textbook.glb'))location.href=sceneViewerURL();else toast('自訂設定請改用 WebXR AR')}if(k==='zip')exportZip()};
-window.__ltExport=async t=>{const ab=t==='usdz'?await buildUSDZ():await buildGLB();let s='';const u=new Uint8Array(ab);for(let i=0;i<u.length;i+=32768)s+=String.fromCharCode.apply(null,u.subarray(i,i+32768));return btoa(s)};
+window.__lt={camera,controls,leaves:()=>leaves,flyTo};window.__ltExport=async t=>{const ab=t==='usdz'?await buildUSDZ():await buildGLB();let s='';const u=new Uint8Array(ab);for(let i=0;i<u.length;i+=32768)s+=String.fromCharCode.apply(null,u.subarray(i,i+32768));return btoa(s)};
 function enterArUI(mode,hint){arState=mode;document.body.classList.add('armode');$('#arbar').classList.add('on');$('#arMode').textContent=mode==='cam'?'相機實境・1:1':'AR・1:1';$('#arhint').textContent=hint;$('#arhint').classList.add('on');setTimeout(()=>$('#arhint').classList.remove('on'),5000)}
 function exitArUI(){arState=null;document.body.classList.remove('armode');$('#arbar').classList.remove('on');$('#arhint').classList.remove('on');camera.fov=38;camera.updateProjectionMatrix();contact.visible=false;applyBg();sheetH()}
 let camStream=null,videoTex=null;
@@ -733,12 +847,14 @@ async function startXR(){try{const ov=$('#xrov');ov.style.display='block';const 
  xr.session=session;renderer.xr.setReferenceSpaceType('local');await renderer.xr.setSession(session);xr.ref=await session.requestReferenceSpace('local');const viewer=await session.requestReferenceSpace('viewer');xr.hit=await session.requestHitTestSource({space:viewer});xr.placed=false;
  arState='xr';scene.background=null;ground.visible=false;contact.visible=true;world.scale.setScalar(0.01);world.visible=false;outG.visible=false;
  if(!reticle){reticle=new THREE.Mesh(new THREE.RingGeometry(.06,.075,40).rotateX(-Math.PI/2),new THREE.MeshBasicMaterial({color:0x6fc3ff}));reticle.matrixAutoUpdate=false;scene.add(reticle)}reticle.visible=false;
- const ctrl=renderer.xr.getController(0);ctrl.addEventListener('select',()=>{if(reticle.visible){world.position.setFromMatrixPosition(reticle.matrix);world.visible=true;xr.placed=true;$('#xrhint').textContent='已放置 1:1 實際尺寸・再點一下可移動位置';}});scene.add(ctrl);
+ const ctrl=renderer.xr.getController(0);ctrl.addEventListener('select',()=>{if(reticle.visible&&!xr.placed){world.position.setFromMatrixPosition(reticle.matrix);world.visible=true;xr.placed=true;$('#xrhint').textContent='已放置 1:1 實際尺寸・用下方按鈕翻頁、看封底、攤開';}});scene.add(ctrl);
  session.addEventListener('end',()=>{xr.session=null;xr.hit=null;ov.style.display='none';world.scale.setScalar(1);world.position.set(0,0,0);world.visible=true;if(reticle)reticle.visible=false;outG.visible=showOut;exitArUI()})}
  catch(err){console.warn(err);$('#xrov').style.display='none';toast('WebXR 無法啟動：請在 Android Chrome 以 https 開啟獨立版')}}
 function xrFrame(frame){if(!xr.hit)return;const r=frame.getHitTestResults(xr.hit);if(r.length){const p=r[0].getPose(xr.ref);reticle.visible=true;reticle.matrix.fromArray(p.transform.matrix)}else reticle.visible=false}
 $('#xrExit').onclick=()=>xr.session?.end();
-async function exportTarget(){if(leaves[0].target)openClose();await new Promise(r=>setTimeout(r,900));const g=new THREE.Group();const c=bookRoot.clone(true);const cc=c.getObjectByName('contact');if(cc)cc.removeFromParent();g.add(c);g.scale.setScalar(0.01);g.updateMatrixWorld(true);const rm=[];c.traverse(o=>{if(o.isSprite||o.isLine||(o.isMesh&&!o.visible))rm.push(o);if(o.isMesh&&Array.isArray(o.material))o.material=o.material[0]});rm.forEach(o=>o.removeFromParent());return g}
+$('#xrov').addEventListener('beforexrselect',e=>{if(e.target.closest('button'))e.preventDefault()});
+$('#xrctl').onclick=e=>{const b=e.target.closest('button');if(!b)return;const k=b.dataset.x;if(k==='prev')(S.bind==='R'?flipPrev:flipNext)();if(k==='next')(S.bind==='R'?flipNext:flipPrev)();if(k==='open')openClose();if(k==='back')toggleBack();if(k==='unfold')toggleUnfold()};
+async function exportTarget(){return snapGroup('Model',true)}
 async function quickLook(){try{toast('產生 USDZ 模型…');const {USDZExporter}=await import('three/addons/exporters/USDZExporter.js');const g=await exportTarget();const ab=await new USDZExporter().parseAsync(g);const url=URL.createObjectURL(new Blob([ab],{type:'model/vnd.usdz+zip'}));const a=document.createElement('a');a.rel='ar';a.href=url;a.download='textbook.usdz';a.appendChild(document.createElement('img'));document.body.appendChild(a);a.click();a.remove()}catch(err){console.warn(err);toast('USDZ 產生失敗')}}
 async function exportZip(){try{toast('產生 3D 模型包…');const [{USDZExporter},{GLTFExporter},{zipSync}]=await Promise.all([import('three/addons/exporters/USDZExporter.js'),import('three/addons/exporters/GLTFExporter.js'),import('three/addons/libs/fflate.module.js')]);const g=await exportTarget();
  const usdz=new Uint8Array(await new USDZExporter().parseAsync(g,{maxTextureSize:2048}));const glb=new Uint8Array(await new GLTFExporter().parseAsync(g,{binary:true,maxTextureSize:2048}));const base=`textbook-${S.size}-${S.W}x${S.H}x${S.T}cm`;
