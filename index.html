@@ -784,6 +784,7 @@ async function buildARStatesUSDZ(){const {USDZExporter}=await import('three/addo
  const unf=[];for(let k=1;k<=FR+3;k++)unf.push(snap(`U_${k}`,{uf:k/(FR+4)}));const flat=snap('SU',{uf:1});chain.push([back,[...over].reverse().concat(unf),flat]);
  chain.push([flat,[...unf].reverse(),'S0']);
  loadBookState(saved);
+ root.scale.setScalar(0.01);root.updateMatrixWorld(true);
  // collect mesh ids per group (exporter writes Object_<id>)
  const ids={};groups.forEach(g=>{ids[g.name]=[];g.traverseVisible(o=>{if(o.isMesh)ids[g.name].push(o.id)})});
  const raw=await new USDZExporter().parseAsync(root,{maxTextureSize:2048});
