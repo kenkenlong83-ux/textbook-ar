@@ -761,14 +761,14 @@ async function buildUSDZ(){return buildARStatesUSDZ()}
 const shadowTex=(()=>{const c=document.createElement('canvas');c.width=c.height=256;const g=c.getContext('2d');g.fillStyle='rgba(0,0,0,0)';g.fillRect(0,0,256,256);
  g.filter='blur(14px)';g.fillStyle='rgba(0,0,0,.42)';g.fillRect(34,34,188,188);g.filter='blur(4px)';g.fillStyle='rgba(0,0,0,.38)';g.fillRect(44,44,168,168);g.filter='none';
  const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;return t})();
-const shadowMatX=new THREE.MeshStandardMaterial({color:0x000000,map:shadowTex,transparent:true,roughness:1,metalness:0,depthWrite:false});
+const SHADOW_GEO=new THREE.PlaneGeometry(1,1).rotateX(-Math.PI/2);const SHADOW_STEPS=[[2.2,.07],[1.4,.08],[.8,.1],[.35,.13],[-.2,.2]].map(([m,o])=>[m,new THREE.MeshStandardMaterial({color:0x000000,transparent:true,opacity:o,roughness:1,metalness:0,depthWrite:false})]);
 function snapGroup(name,scaled){bookRoot.updateMatrixWorld(true);const c=bookRoot.clone(true);c.position.copy(bookRoot.position);c.rotation.copy(bookRoot.rotation);
  const rm=[];c.traverse(o=>{if(o.name==='contact'||o.isSprite||o.isLine||!o.visible)rm.push(o)});rm.forEach(o=>o.removeFromParent());
  c.traverse(o=>{if(o.isMesh){if(Array.isArray(o.material))o.material=o.material[0];if(o.geometry.userData.dyn)o.geometry=o.geometry.clone()}});
  const w=new THREE.Group();w.name=name;w.add(c);w.updateMatrixWorld(true);
  const bb=new THREE.Box3().setFromObject(c);const m=1.6,sw=bb.max.x-bb.min.x+2*m,sd=bb.max.z-bb.min.z+2*m;
- const sh=new THREE.Mesh(new THREE.PlaneGeometry(1,1).rotateX(-Math.PI/2),shadowMatX);sh.scale.set(sw*1.0,1,sd);sh.position.set((bb.min.x+bb.max.x)/2,0.004,(bb.min.z+bb.max.z)/2);
- const hgt=Math.max(0,bb.min.y);sh.visible=hgt<1.5;w.add(sh);
+ const fw=bb.max.x-bb.min.x,fd=bb.max.z-bb.min.z,cx=(bb.min.x+bb.max.x)/2,cz=(bb.min.z+bb.max.z)/2;const lift=Math.max(0,bb.min.y);
+ if(lift<1.5)SHADOW_STEPS.forEach(([mg,mat],k)=>{const sh=new THREE.Mesh(SHADOW_GEO,mat);sh.scale.set(fw+2*mg,1,fd+2*mg);sh.position.set(cx,0.03+k*0.012,cz);w.add(sh)});
  if(scaled){const r=new THREE.Group();r.add(w);r.scale.setScalar(0.01);r.updateMatrixWorld(true);return r}return w}
 function saveBookState(){return{p:leaves.map(l=>[l.pos,l.target,l.dir]),fo:flipOver,foT:flipOverT,uf:unfold,ufT:unfoldT}}
 function loadBookState(st){leaves.forEach((l,i)=>{[l.pos,l.target,l.dir]=st.p[i]});flipOver=st.fo;flipOverT=st.foT;unfold=st.uf;unfoldT=st.ufT;if(jacket)jacket.wasU=true;updateBook(0,true);applyPose()}
@@ -800,13 +800,24 @@ async function buildARStatesUSDZ(){const {USDZExporter}=await import('three/addo
  const grp=(kids,type)=>{const id='G'+(uid++);return[id,`def Preliminary_Action "${id}"\n{\nrel actions = [ ${kids.map(k=>'<'+k[0]+'>').join(', ')} ]\ntoken info:id = "Group"\nbool loops = 0\nint performCount = 1\ntoken type = "${type}"\n${kids.map(k=>k[1]).join('')}}\n`]};
  let beh='def Scope "Behaviors"\n{\n';chain.forEach(([a,fr,b],n)=>{const steps=[];const seq=[a,...fr,b];for(let k=1;k<seq.length;k++){steps.push(grp([vis(seq[k-1],false),vis(seq[k],true)],'parallel'));if(k<seq.length-1)steps.push(wait(DT))}
   const act=grp(steps,'serial');beh+=`def Preliminary_Behavior "B${n}"\n{\nrel triggers = <Tap${n}>\nrel actions = <${act[0]}>\nuniform bool exclusive = 0\n\ndef Preliminary_Trigger "Tap${n}"\n{\nrel affectedObjects = [ ${P(a)} ]\ntoken info:id = "TapGesture"\n}\n\n${act[1]}}\n`});beh+='}\n';
- usda=head+body+beh+tail;
- // re-encode large opaque textures as JPEG
- for(const fn of Object.keys(files)){if(!/^textures\/.*\.png$/.test(fn)||files[fn].length<150000)continue;if(fn.includes('Texture_'+shadowTex.id+'_'))continue;
+ return finalizeUSDZ(files,head+body+beh+tail,fflate)}
+async function finalizeUSDZ(files,usda,fflate){
+ usda=usda.replace('def Xform "Scene" (\n','def Xform "Scene" (\n\t\t\tapiSchemas = ["Preliminary_AnchoringAPI"]\n');
+ const mi=usda.indexOf('def "Materials"');if(mi>0){  const rootClose=usda.lastIndexOf('\n}',mi);usda=usda.slice(0,rootClose)+'\n'+usda.slice(mi)+'\n}\n'}
+ usda=usda.split('</Materials/').join('</Root/Materials/');
+ for(const fn of Object.keys(files)){if(!/^textures\/.*\.png$/.test(fn)||files[fn].length<150000)continue;
   try{const bmp=await createImageBitmap(new Blob([files[fn]],{type:'image/png'}));const cv=document.createElement('canvas');cv.width=bmp.width;cv.height=bmp.height;cv.getContext('2d').drawImage(bmp,0,0);const jb=await new Promise(r=>cv.toBlob(r,'image/jpeg',.88));const nf=fn.replace(/\.png$/,'.jpg');files[nf]=new Uint8Array(await jb.arrayBuffer());delete files[fn];usda=usda.split(fn.slice(9)).join(nf.slice(9))}catch(e){console.warn(e)}}
  const out={'model.usda':fflate.strToU8(usda)};for(const k in files)if(k!=='model.usda')out[k]=files[k];
  let off=0;for(const fn in out){const f=out[fn];off+=34+fn.length;const m64=off&63;if(m64!==4){out[fn]=[f,{extra:{12345:new Uint8Array(64-m64)}}]}off=f.length}
  return fflate.zipSync(out,{level:0})}
+async function singleStateUSDZ(st){const {USDZExporter}=await import('three/addons/exporters/USDZExporter.js');const fflate=await import('three/addons/libs/fflate.module.js');
+ const saved=saveBookState();setInstant(st);const g=snapGroup('Model',true);loadBookState(saved);
+ const raw=await new USDZExporter().parseAsync(g,{maxTextureSize:2048});const files=fflate.unzipSync(new Uint8Array(raw));return finalizeUSDZ(files,fflate.strFromU8(files['model.usda']),fflate)}
+function qlStates(){const n=Math.max(1,Math.min(leaves.length-2,4));const st=[['封面',{}],['翻開',{pos:[1]}]];for(let j=2;j<=n;j++)st.push([`p${2*j-2}｜p${2*j-1}`,{pos:Array(j).fill(1)}]);st.push(['封底',{fo:1}],['攤開封面',{uf:1}]);return st}
+let qlCache={key:null,urls:[]};
+async function prepStates(){const key=modelKey();const list=qlStates();if(qlCache.key!==key){qlCache={key,urls:[]}}
+ const box=$('#qlStates');if(!box)return;const draw=()=>{box.innerHTML=list.map(([t],i)=>qlCache.urls[i]?`<a class="opt" rel="ar" href="${qlCache.urls[i]}#allowsContentScaling=0" style="text-decoration:none;color:inherit"><img alt="" style="display:none">${t}</a>`:`<button class="opt" disabled>${t}<small>準備中…</small></button>`).join('')};draw();
+ for(let i=0;i<list.length;i++){if(qlCache.urls[i])continue;try{const z=await singleStateUSDZ(list[i][1]);if(qlCache.key!==key)return;qlCache.urls[i]=URL.createObjectURL(new Blob([z],{type:'model/vnd.usdz+zip'}));draw()}catch(e){console.warn(e)}}}
 async function buildGLB(){const {GLTFExporter}=await import('three/addons/exporters/GLTFExporter.js');const g=await exportTarget();return new GLTFExporter().parseAsync(g,{binary:true,maxTextureSize:2048})}
 async function prepUSDZ(){const key=modelKey();if(ready?.key===key)return ready.url;let url;
  if(key===DEFAULT_KEY&&await hasStatic('textbook.usdz'))url='textbook.usdz';else{toast('正在依目前設定產生 AR 模型…');url=URL.createObjectURL(new Blob([await buildUSDZ()],{type:'model/vnd.usdz+zip'}))}
@@ -815,12 +826,12 @@ function launchQL(url){const a=document.createElement('a');a.rel='ar';a.href=url
 function sceneViewerURL(){const glb=new URL('textbook.glb',location.href).href;const back=location.href.split('#')[0];return`intent://arvr.google.com/scene-viewer/1.0?file=${encodeURIComponent(glb)}&mode=ar_preferred&resizable=false&title=${encodeURIComponent('技高國文 4（1:1）')}#Intent;scheme=https;package=com.google.android.googlequicksearchbox;action=android.intent.action.VIEW;S.browser_fallback_url=${encodeURIComponent(back)};end;`}
 async function goAR(){
  if(inSandbox||inApp)return arModal();
- if(arSupport.ios){const key=modelKey();if(ready?.key===key){launchQL(ready.url);return}
+ if(arSupport.ios){
   try{const url=await prepUSDZ();arModal(url)}catch(err){console.warn(err);toast('AR 模型產生失敗')}return}
  if(arSupport.android){if(arSupport.xr)return startXR();if(modelKey()===DEFAULT_KEY&&await hasStatic('textbook.glb')){location.href=sceneViewerURL();return}}
  arModal()}
 function arModal(qlURL){const items=[
- {k:'ios',t:'iPhone / iPad 原生 AR（推薦・可翻頁）',s:inSandbox?'需在正式網址以 Safari 開啟':inApp?'請先改用 Safari 開啟':arSupport.ios?'自動貼合桌面；點書本即可翻開、翻頁、看封底、攤開封面':'請用 iPhone 或 iPad 的 Safari 開啟',ok:arSupport.ios&&!inSandbox&&!inApp,ql:qlURL},
+ {k:'ios',t:'iPhone / iPad 原生 AR（點書本翻頁）',s:inSandbox?'需在正式網址以 Safari 開啟':inApp?'請先改用 Safari 開啟':arSupport.ios?'自動貼合桌面；點書本即可翻開、翻頁、看封底、攤開封面':'請用 iPhone 或 iPad 的 Safari 開啟',ok:arSupport.ios&&!inSandbox&&!inApp,ql:qlURL},
  {k:'sv',t:'Android 原生 AR（Scene Viewer）',s:inSandbox?'需在正式網址以 Chrome 開啟':arSupport.android?'自動偵測桌面，1:1 尺寸、真實透視與環境光影（目前預設設定）':'請用 Android 手機的 Chrome 開啟',ok:arSupport.android&&!inSandbox&&!inApp},
  {k:'xr',t:'WebXR AR（Android Chrome・可翻頁）',s:inSandbox?'需在正式網址開啟':arSupport.xr?'偵測桌面後點一下放置；畫面下方按鈕可翻頁、看封底、攤開':'此裝置不支援 WebXR',ok:arSupport.xr&&!inSandbox},
  {k:'photo',t:'照片實境',s:'拍一張桌面照片當背景，在照片上擺書（任何裝置可用）',ok:true},
@@ -831,11 +842,12 @@ function arModal(qlURL){const items=[
  if(qlURL)$('#arEnvNote').textContent='AR 模型已就緒。進入 AR 後書會自動貼合桌面（1:1、真實透視與光影）；點一下書本依序：翻開封面 → 翻頁 → 闔上翻到封底 → 攤開整張封面 → 回到封面。';
  items.sort((x,y)=>(y.ok-x.ok));
  $('#arList').innerHTML=items.map(i=>{const inner=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="4"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5"/></svg><div><b>${i.t}</b><small>${i.s}</small></div>`;
-  return i.ql?`<a class="aropt" rel="ar" href="${i.ql}#allowsContentScaling=0" style="text-decoration:none;color:inherit"><img alt="" style="display:none">${inner}</a>`:`<button class="aropt" data-k="${i.k}" ${i.ok?'':'disabled'}>${inner}</button>`}).join('');$('#arModal').classList.add('on')}
+  return i.ql?`<a class="aropt" rel="ar" href="${i.ql}#allowsContentScaling=0" style="text-decoration:none;color:inherit"><img alt="" style="display:none">${inner}</a>`:`<button class="aropt" data-k="${i.k}" ${i.ok?'':'disabled'}>${inner}</button>`}).join('');if(arSupport.ios&&!inSandbox&&!inApp){$('#arList').insertAdjacentHTML('beforeend','<h3 style="font-size:13px;color:var(--mute);margin:12px 0 6px;font-weight:500">或直接以指定畫面進入 AR</h3><div class="grid" id="qlStates"></div>');prepStates()}
+ $('#arModal').classList.add('on')}
 $('#arBtn').onclick=goAR;
 $('#arList').onclick=async e=>{const b=e.target.closest('.aropt');if(!b||b.disabled)return;if(b.tagName==='A'){setTimeout(()=>$('#arModal').classList.remove('on'),300);return}$('#arModal').classList.remove('on');const k=b.dataset.k;
  if(k==='xr')startXR();if(k==='cam')startCamAR();if(k==='photo'){setTab('bg');$('#bgIn').click()}if(k==='ios'){try{launchQL(await prepUSDZ())}catch{toast('AR 模型產生失敗')}}if(k==='sv'){if(modelKey()===DEFAULT_KEY&&await hasStatic('textbook.glb'))location.href=sceneViewerURL();else toast('自訂設定請改用 WebXR AR')}if(k==='zip')exportZip()};
-window.__lt={camera,controls,leaves:()=>leaves,flyTo};window.__ltExport=async t=>{const ab=t==='usdz'?await buildUSDZ():await buildGLB();let s='';const u=new Uint8Array(ab);for(let i=0;i<u.length;i+=32768)s+=String.fromCharCode.apply(null,u.subarray(i,i+32768));return btoa(s)};
+window.__lt={camera,controls,leaves:()=>leaves,flyTo,one:async s=>{const z=await singleStateUSDZ(s);let r="";for(let i=0;i<z.length;i+=32768)r+=String.fromCharCode.apply(null,z.subarray(i,i+32768));return btoa(r)}};window.__ltExport=async t=>{const ab=t==='usdz'?await buildUSDZ():await buildGLB();let s='';const u=new Uint8Array(ab);for(let i=0;i<u.length;i+=32768)s+=String.fromCharCode.apply(null,u.subarray(i,i+32768));return btoa(s)};
 function enterArUI(mode,hint){arState=mode;document.body.classList.add('armode');$('#arbar').classList.add('on');$('#arMode').textContent=mode==='cam'?'相機實境・1:1':'AR・1:1';$('#arhint').textContent=hint;$('#arhint').classList.add('on');setTimeout(()=>$('#arhint').classList.remove('on'),5000)}
 function exitArUI(){arState=null;document.body.classList.remove('armode');$('#arbar').classList.remove('on');$('#arhint').classList.remove('on');camera.fov=38;camera.updateProjectionMatrix();contact.visible=false;applyBg();sheetH()}
 let camStream=null,videoTex=null;
