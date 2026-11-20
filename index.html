@@ -450,7 +450,7 @@ function buildBook(keepState=true){
  let acc=0;leaves.forEach(l=>{l.yL=T-acc;acc+=l.t});acc=0;leaves.forEach(l=>{acc+=l.t;l.yR=acc});
  LAM=Math.min(3.5,Math.max(.6,T*1.3));
  // perfect-bound page-block slabs (curved wedge that follows the gutter arc)
- const edgeMat=new THREE.MeshStandardMaterial({map:edgeTex,color:0xf1ece2,roughness:.95});pageMats.push(edgeMat);
+ const edgeMat=new THREE.MeshStandardMaterial({map:edgeTex,color:0xe2dccf,roughness:.95});pageMats.push(edgeMat);
  slabs.L=makeSlab('L',edgeMat);slabs.R=makeSlab('R',edgeMat);
  // back cover (bottom face of left block), facing down
  const bg=new THREE.PlaneGeometry(W,H,1,1);bg.rotateX(Math.PI/2);bg.translate(-W/2,TC/2,0);
@@ -753,27 +753,33 @@ const UA=navigator.userAgent;const arSupport={xr:false,cam:!!navigator.mediaDevi
 const inApp=/\bLine\/|FBAN|FBAV|FB_IAB|Instagram|MicroMessenger|WhatsApp|KAKAOTALK/i.test(UA);
 navigator.xr?.isSessionSupported?.('immersive-ar').then(v=>arSupport.xr=v).catch(()=>{});
 /* native AR: iOS AR Quick Look (USDZ) / Android Scene Viewer (GLB) — real plane tracking, 1:1 scale, environment lighting & grounding shadow */
-let DEFAULT_KEY=null,ready=null;const staticCache={};
+let DEFAULT_KEY=null,ready=null;const BUILD='20261120f';const staticCache={};
 function modelKey(){return JSON.stringify([S.size,S.W,S.H,S.T,S.bind,S.fit,S.fin,ART.name,ART.w,ART.h,ART.spine,ART.side])}
 async function hasStatic(f){if(inSandbox)return false;if(f in staticCache)return staticCache[f];try{const r=await fetch(f,{method:'HEAD',cache:'no-store'});staticCache[f]=r.ok}catch{staticCache[f]=false}return staticCache[f]}
 async function buildUSDZ(){return buildARStatesUSDZ()}
 /* ---- AR export: baked contact shadow, snapshots, tap-to-advance states for iOS AR Quick Look ---- */
-const shadowTex=(()=>{const c=document.createElement('canvas');c.width=c.height=256;const g=c.getContext('2d');g.fillStyle='rgba(0,0,0,0)';g.fillRect(0,0,256,256);
- g.filter='blur(14px)';g.fillStyle='rgba(0,0,0,.42)';g.fillRect(34,34,188,188);g.filter='blur(4px)';g.fillStyle='rgba(0,0,0,.38)';g.fillRect(44,44,168,168);g.filter='none';
- const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;return t})();
-const SHADOW_GEO=new THREE.PlaneGeometry(1,1).rotateX(-Math.PI/2);const SHADOW_STEPS=[[2.2,.07],[1.4,.08],[.8,.1],[.35,.13],[-.2,.2]].map(([m,o])=>[m,new THREE.MeshStandardMaterial({color:0x000000,transparent:true,opacity:o,roughness:1,metalness:0,depthWrite:false})]);
+const shadowTex=(()=>{const c=document.createElement('canvas');c.width=c.height=256;const g=c.getContext('2d');g.clearRect(0,0,256,256);g.filter='blur(13px)';g.fillStyle='rgba(0,0,0,.5)';g.fillRect(30,30,196,196);g.filter='blur(3px)';g.fillStyle='rgba(0,0,0,.45)';g.fillRect(27,27,202,202);g.filter='none';const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;return t})();
+const SHADOW_CACHE={};
+function shadowFor(fw,fd,mg){const key=Math.round(fw)+'x'+Math.round(fd);if(SHADOW_CACHE[key])return SHADOW_CACHE[key];
+ const W=fw+2*mg,D=fd+2*mg,px=8,cw=Math.round(W*px),ch=Math.round(D*px);const c=document.createElement('canvas');c.width=cw;c.height=ch;const g=c.getContext('2d');const im=g.createImageData(cw,ch);
+ const hx=fw/2-.15,hz=fd/2-.15;
+ for(let y=0;y<ch;y++)for(let x=0;x<cw;x++){const X=(x+.5)/px-W/2,Z=(y+.5)/px-D/2;const dx=Math.max(Math.abs(X)-hx,0),dz=Math.max(Math.abs(Z)-hz,0);const d=Math.hypot(dx,dz);
+  const a=(d<=0?.62:.5*Math.exp(-d/.28)+.24*Math.exp(-d/1.3))*Math.min(1,Math.max(0,(mg-.2-d)/1.2));const k=(y*cw+x)*4;im.data[k]=im.data[k+1]=im.data[k+2]=0;im.data[k+3]=Math.round(255*Math.min(.7,a))}
+ g.putImageData(im,0,0);const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;
+ return SHADOW_CACHE[key]=new THREE.MeshStandardMaterial({color:0xffffff,map:t,transparent:true,roughness:1,metalness:0,depthWrite:false})}
+const SHADOW_GEO=new THREE.PlaneGeometry(1,1).rotateX(-Math.PI/2);const shadowMatX=new THREE.MeshStandardMaterial({color:0xffffff,map:shadowTex,transparent:true,roughness:1,metalness:0,depthWrite:false});
 function snapGroup(name,scaled){bookRoot.updateMatrixWorld(true);const c=bookRoot.clone(true);c.position.copy(bookRoot.position);c.rotation.copy(bookRoot.rotation);
  const rm=[];c.traverse(o=>{if(o.name==='contact'||o.isSprite||o.isLine||!o.visible)rm.push(o)});rm.forEach(o=>o.removeFromParent());
  c.traverse(o=>{if(o.isMesh){if(Array.isArray(o.material))o.material=o.material[0];if(o.geometry.userData.dyn)o.geometry=o.geometry.clone()}});
  const w=new THREE.Group();w.name=name;w.add(c);w.updateMatrixWorld(true);
  const bb=new THREE.Box3().setFromObject(c);const m=1.6,sw=bb.max.x-bb.min.x+2*m,sd=bb.max.z-bb.min.z+2*m;
  const fw=bb.max.x-bb.min.x,fd=bb.max.z-bb.min.z,cx=(bb.min.x+bb.max.x)/2,cz=(bb.min.z+bb.max.z)/2;const lift=Math.max(0,bb.min.y);
- if(lift<1.5)SHADOW_STEPS.forEach(([mg,mat],k)=>{const sh=new THREE.Mesh(SHADOW_GEO,mat);sh.scale.set(fw+2*mg,1,fd+2*mg);sh.position.set(cx,0.03+k*0.012,cz);w.add(sh)});
+ if(lift<1.5){const mg=4;const sh=new THREE.Mesh(SHADOW_GEO,shadowFor(fw,fd,mg));sh.scale.set(fw+2*mg,1,fd+2*mg);sh.position.set(cx,0.01,cz);w.add(sh)}
  if(scaled){const r=new THREE.Group();r.add(w);r.scale.setScalar(0.01);r.updateMatrixWorld(true);return r}return w}
 function saveBookState(){return{p:leaves.map(l=>[l.pos,l.target,l.dir]),fo:flipOver,foT:flipOverT,uf:unfold,ufT:unfoldT}}
 function loadBookState(st){leaves.forEach((l,i)=>{[l.pos,l.target,l.dir]=st.p[i]});flipOver=st.fo;flipOverT=st.foT;unfold=st.uf;unfoldT=st.ufT;if(jacket)jacket.wasU=true;updateBook(0,true);applyPose()}
 function setInstant({pos=[],tgt=null,dir=1,fo=0,uf=0}){leaves.forEach((l,i)=>{const p=pos[i]||0;l.pos=p;l.target=tgt?(tgt[i]||0):(p>0?1:0);l.dir=dir});flipOver=flipOverT=fo;unfold=unfoldT=uf;if(jacket)jacket.wasU=true;updateBook(0,true);applyPose()}
-async function buildARStatesUSDZ(){const {USDZExporter}=await import('three/addons/exporters/USDZExporter.js');const fflate=await import('three/addons/libs/fflate.module.js');
+async function buildARStatesUSDZ(mode='tap'){const {USDZExporter}=await import('three/addons/exporters/USDZExporter.js');const fflate=await import('three/addons/libs/fflate.module.js');
  const saved=saveBookState();const root=new THREE.Group();const groups=[];const FR=5,DT=0.055;
  const snap=(name,st)=>{setInstant(st);const g=snapGroup(name);root.add(g);groups.push(g);return name};
  const flips=Math.max(1,Math.min(leaves.length-2,4));const ones=n=>Array.from({length:n},()=>1);
@@ -794,8 +800,18 @@ async function buildARStatesUSDZ(){const {USDZExporter}=await import('three/addo
  const blocks={};starts.forEach(([st,id],n)=>{blocks[id]=usda.slice(st,n+1<starts.length?starts[n+1][0]:endIdx)});
  const head=usda.slice(0,starts[0][0]),tail=usda.slice(endIdx);const base='/Root/Scenes/Scene/';
  const P=(g)=>ids[g].map(id=>`<${base}${g}/Object_${id}>`).join(', ');
+ if(mode==='anim'){ // flipbook timeline using stepped scale keys (transform animation auto-plays in AR Quick Look)
+  const TPS=60,HOLD=96,FD=4;const iv={};let t=0;const seq=[];chain.forEach(([a,fr,b])=>{seq.push([a,HOLD]);fr.forEach(f=>seq.push([f,FD]))});
+  seq.forEach(([g,d])=>{(iv[g]=iv[g]||[]).push([t,t+d]);t+=d});const END=t;
+  const fmt=v=>`(${v}, ${v}, ${v})`;
+  let body='';groups.forEach(g=>{const keys=new Map();keys.set(0,0.0001);(iv[g.name]||[]).forEach(([a,b])=>{if(a>0)keys.set(a-1,keys.has(a-1)&&keys.get(a-1)===1?1:0.0001);keys.set(a,1);keys.set(b-1,1);if(b<END)keys.set(b,0.0001);else keys.set(END,1)});
+   if(!keys.has(END))keys.set(END,keys.get([...keys.keys()].sort((x,y)=>x-y).filter(k=>k<=END).pop())??0.0001);
+   const ks=[...keys.entries()].sort((x,y)=>x[0]-y[0]).map(([k,v])=>`${k}: ${fmt(v)}`).join(', ');
+   body+=`def Xform "${g.name}"\n{\nfloat3 xformOp:scale.timeSamples = { ${ks} }\nuniform token[] xformOpOrder = ["xformOp:scale"]\n${ids[g.name].map(id=>blocks[id]||'').join('')}\n}\n`});
+  let hd=head.replace('upAxis = "Y"\n',`upAxis = "Y"\n\tstartTimeCode = 0\n\tendTimeCode = ${END}\n\ttimeCodesPerSecond = ${TPS}\n\tframesPerSecond = ${TPS}\n`);
+  return finalizeUSDZ(files,hd+body+tail,fflate)}
  let body='';groups.forEach((g,n)=>{body+=`def Xform "${g.name}"\n{\n${n===0?'':'token visibility = "invisible"\n'}${ids[g.name].map(id=>blocks[id]||'').join('')}\n}\n`});
- let uid=0;const vis=(g,show)=>{const id='V'+(uid++);return[id,`def Preliminary_Action "${id}"\n{\nrel affectedObjects = [ ${P(g)} ]\ndouble duration = 0\ntoken easeType = "none"\ntoken info:id = "Visibility"\ntoken motionType = "none"\ndouble moveDistance = 0\ntoken style = "basic"\ntoken type = "${show?'show':'hide'}"\n}\n`]};
+ let uid=0;const vis=(g,show)=>{const id='V'+(uid++);return[id,`def Preliminary_Action "${id}"\n{\nrel affectedObjects = <${base}${g}>\ndouble duration = 0\ntoken easeType = "none"\ntoken info:id = "Visibility"\ntoken motionType = "none"\ndouble moveDistance = 0\ntoken style = "basic"\ntoken type = "${show?'show':'hide'}"\n}\n`]};
  const wait=d=>{const id='W'+(uid++);return[id,`def Preliminary_Action "${id}"\n{\ndouble duration = ${d}\ntoken info:id = "Wait"\n}\n`]};
  const grp=(kids,type)=>{const id='G'+(uid++);return[id,`def Preliminary_Action "${id}"\n{\nrel actions = [ ${kids.map(k=>'<'+k[0]+'>').join(', ')} ]\ntoken info:id = "Group"\nbool loops = 0\nint performCount = 1\ntoken type = "${type}"\n${kids.map(k=>k[1]).join('')}}\n`]};
  let beh='def Scope "Behaviors"\n{\n';chain.forEach(([a,fr,b],n)=>{const steps=[];const seq=[a,...fr,b];for(let k=1;k<seq.length;k++){steps.push(grp([vis(seq[k-1],false),vis(seq[k],true)],'parallel'));if(k<seq.length-1)steps.push(wait(DT))}
@@ -805,6 +821,7 @@ async function finalizeUSDZ(files,usda,fflate){
  usda=usda.replace('def Xform "Scene" (\n','def Xform "Scene" (\n\t\t\tapiSchemas = ["Preliminary_AnchoringAPI"]\n');
  const mi=usda.indexOf('def "Materials"');if(mi>0){  const rootClose=usda.lastIndexOf('\n}',mi);usda=usda.slice(0,rootClose)+'\n'+usda.slice(mi)+'\n}\n'}
  usda=usda.split('</Materials/').join('</Root/Materials/');
+ usda=usda.replace(/(inputs:opacity\.connect[^\n]*\n)([\s\S]*?)[ \t]*float inputs:opacity = 1\n/g,'$1$2');
  for(const fn of Object.keys(files)){if(!/^textures\/.*\.png$/.test(fn)||files[fn].length<150000)continue;
   try{const bmp=await createImageBitmap(new Blob([files[fn]],{type:'image/png'}));const cv=document.createElement('canvas');cv.width=bmp.width;cv.height=bmp.height;cv.getContext('2d').drawImage(bmp,0,0);const jb=await new Promise(r=>cv.toBlob(r,'image/jpeg',.88));const nf=fn.replace(/\.png$/,'.jpg');files[nf]=new Uint8Array(await jb.arrayBuffer());delete files[fn];usda=usda.split(fn.slice(9)).join(nf.slice(9))}catch(e){console.warn(e)}}
  const out={'model.usda':fflate.strToU8(usda)};for(const k in files)if(k!=='model.usda')out[k]=files[k];
@@ -813,14 +830,14 @@ async function finalizeUSDZ(files,usda,fflate){
 async function singleStateUSDZ(st){const {USDZExporter}=await import('three/addons/exporters/USDZExporter.js');const fflate=await import('three/addons/libs/fflate.module.js');
  const saved=saveBookState();setInstant(st);const g=snapGroup('Model',true);loadBookState(saved);
  const raw=await new USDZExporter().parseAsync(g,{maxTextureSize:2048});const files=fflate.unzipSync(new Uint8Array(raw));return finalizeUSDZ(files,fflate.strFromU8(files['model.usda']),fflate)}
-function qlStates(){const n=Math.max(1,Math.min(leaves.length-2,4));const st=[['封面',{}],['翻開',{pos:[1]}]];for(let j=2;j<=n;j++)st.push([`p${2*j-2}｜p${2*j-1}`,{pos:Array(j).fill(1)}]);st.push(['封底',{fo:1}],['攤開封面',{uf:1}]);return st}
+function qlStates(){const n=Math.max(1,Math.min(leaves.length-2,4));const st=[['▶ 自動翻頁展示','anim'],['封面',{}],['翻開',{pos:[1]}]];for(let j=2;j<=n;j++)st.push([`p${2*j-2}｜p${2*j-1}`,{pos:Array(j).fill(1)}]);st.push(['封底',{fo:1}],['攤開封面',{uf:1}]);return st}
 let qlCache={key:null,urls:[]};
 async function prepStates(){const key=modelKey();const list=qlStates();if(qlCache.key!==key){qlCache={key,urls:[]}}
  const box=$('#qlStates');if(!box)return;const draw=()=>{box.innerHTML=list.map(([t],i)=>qlCache.urls[i]?`<a class="opt" rel="ar" href="${qlCache.urls[i]}#allowsContentScaling=0" style="text-decoration:none;color:inherit"><img alt="" style="display:none">${t}</a>`:`<button class="opt" disabled>${t}<small>準備中…</small></button>`).join('')};draw();
- for(let i=0;i<list.length;i++){if(qlCache.urls[i])continue;try{const z=await singleStateUSDZ(list[i][1]);if(qlCache.key!==key)return;qlCache.urls[i]=URL.createObjectURL(new Blob([z],{type:'model/vnd.usdz+zip'}));draw()}catch(e){console.warn(e)}}}
+ for(let i=0;i<list.length;i++){if(qlCache.urls[i])continue;try{if(list[i][1]==='anim'&&key===DEFAULT_KEY&&await hasStatic('textbook-anim.usdz')){qlCache.urls[i]='textbook-anim.usdz?v='+BUILD;draw();continue}const z=list[i][1]==='anim'?await buildARStatesUSDZ('anim'):await singleStateUSDZ(list[i][1]);if(qlCache.key!==key)return;qlCache.urls[i]=URL.createObjectURL(new Blob([z],{type:'model/vnd.usdz+zip'}));draw()}catch(e){console.warn(e)}}}
 async function buildGLB(){const {GLTFExporter}=await import('three/addons/exporters/GLTFExporter.js');const g=await exportTarget();return new GLTFExporter().parseAsync(g,{binary:true,maxTextureSize:2048})}
 async function prepUSDZ(){const key=modelKey();if(ready?.key===key)return ready.url;let url;
- if(key===DEFAULT_KEY&&await hasStatic('textbook.usdz'))url='textbook.usdz';else{toast('正在依目前設定產生 AR 模型…');url=URL.createObjectURL(new Blob([await buildUSDZ()],{type:'model/vnd.usdz+zip'}))}
+ if(key===DEFAULT_KEY&&await hasStatic('textbook.usdz'))url='textbook.usdz?v='+BUILD;else{toast('正在依目前設定產生 AR 模型…');url=URL.createObjectURL(new Blob([await buildUSDZ()],{type:'model/vnd.usdz+zip'}))}
  ready={key,url};return url}
 function launchQL(url){const a=document.createElement('a');a.rel='ar';a.href=url+'#allowsContentScaling=0';a.appendChild(document.createElement('img'));document.body.appendChild(a);a.click();a.remove()}
 function sceneViewerURL(){const glb=new URL('textbook.glb',location.href).href;const back=location.href.split('#')[0];return`intent://arvr.google.com/scene-viewer/1.0?file=${encodeURIComponent(glb)}&mode=ar_preferred&resizable=false&title=${encodeURIComponent('技高國文 4（1:1）')}#Intent;scheme=https;package=com.google.android.googlequicksearchbox;action=android.intent.action.VIEW;S.browser_fallback_url=${encodeURIComponent(back)};end;`}
@@ -842,12 +859,12 @@ function arModal(qlURL){const items=[
  if(qlURL)$('#arEnvNote').textContent='AR 模型已就緒。進入 AR 後書會自動貼合桌面（1:1、真實透視與光影）；點一下書本依序：翻開封面 → 翻頁 → 闔上翻到封底 → 攤開整張封面 → 回到封面。';
  items.sort((x,y)=>(y.ok-x.ok));
  $('#arList').innerHTML=items.map(i=>{const inner=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="4"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5"/></svg><div><b>${i.t}</b><small>${i.s}</small></div>`;
-  return i.ql?`<a class="aropt" rel="ar" href="${i.ql}#allowsContentScaling=0" style="text-decoration:none;color:inherit"><img alt="" style="display:none">${inner}</a>`:`<button class="aropt" data-k="${i.k}" ${i.ok?'':'disabled'}>${inner}</button>`}).join('');if(arSupport.ios&&!inSandbox&&!inApp){$('#arList').insertAdjacentHTML('beforeend','<h3 style="font-size:13px;color:var(--mute);margin:12px 0 6px;font-weight:500">或直接以指定畫面進入 AR</h3><div class="grid" id="qlStates"></div>');prepStates()}
+  return i.ql?`<a class="aropt" rel="ar" href="${i.ql}#allowsContentScaling=0" style="text-decoration:none;color:inherit"><img alt="" style="display:none">${inner}</a>`:`<button class="aropt" data-k="${i.k}" ${i.ok?'':'disabled'}>${inner}</button>`}).join('');if(arSupport.ios&&!inSandbox&&!inApp){$('#arList').insertAdjacentHTML('beforeend','<h3 style="font-size:13px;color:var(--mute);margin:12px 0 6px;font-weight:500">自動展示，或以指定畫面進入 AR</h3><div class="grid" id="qlStates"></div>');prepStates()}
  $('#arModal').classList.add('on')}
 $('#arBtn').onclick=goAR;
 $('#arList').onclick=async e=>{const b=e.target.closest('.aropt');if(!b||b.disabled)return;if(b.tagName==='A'){setTimeout(()=>$('#arModal').classList.remove('on'),300);return}$('#arModal').classList.remove('on');const k=b.dataset.k;
  if(k==='xr')startXR();if(k==='cam')startCamAR();if(k==='photo'){setTab('bg');$('#bgIn').click()}if(k==='ios'){try{launchQL(await prepUSDZ())}catch{toast('AR 模型產生失敗')}}if(k==='sv'){if(modelKey()===DEFAULT_KEY&&await hasStatic('textbook.glb'))location.href=sceneViewerURL();else toast('自訂設定請改用 WebXR AR')}if(k==='zip')exportZip()};
-window.__lt={camera,controls,leaves:()=>leaves,flyTo,one:async s=>{const z=await singleStateUSDZ(s);let r="";for(let i=0;i<z.length;i+=32768)r+=String.fromCharCode.apply(null,z.subarray(i,i+32768));return btoa(r)}};window.__ltExport=async t=>{const ab=t==='usdz'?await buildUSDZ():await buildGLB();let s='';const u=new Uint8Array(ab);for(let i=0;i<u.length;i+=32768)s+=String.fromCharCode.apply(null,u.subarray(i,i+32768));return btoa(s)};
+window.__lt={camera,controls,leaves:()=>leaves,flyTo,one:async s=>{const z=await singleStateUSDZ(s);let r="";for(let i=0;i<z.length;i+=32768)r+=String.fromCharCode.apply(null,z.subarray(i,i+32768));return btoa(r)}};window.__ltExport=async t=>{const ab=t==='usdz'?await buildUSDZ():t==='anim'?await buildARStatesUSDZ('anim'):await buildGLB();let s='';const u=new Uint8Array(ab);for(let i=0;i<u.length;i+=32768)s+=String.fromCharCode.apply(null,u.subarray(i,i+32768));return btoa(s)};
 function enterArUI(mode,hint){arState=mode;document.body.classList.add('armode');$('#arbar').classList.add('on');$('#arMode').textContent=mode==='cam'?'相機實境・1:1':'AR・1:1';$('#arhint').textContent=hint;$('#arhint').classList.add('on');setTimeout(()=>$('#arhint').classList.remove('on'),5000)}
 function exitArUI(){arState=null;document.body.classList.remove('armode');$('#arbar').classList.remove('on');$('#arhint').classList.remove('on');camera.fov=38;camera.updateProjectionMatrix();contact.visible=false;applyBg();sheetH()}
 let camStream=null,videoTex=null;
