@@ -757,7 +757,7 @@ const UA=navigator.userAgent;const arSupport={xr:false,cam:!!navigator.mediaDevi
 const inApp=/\bLine\/|FBAN|FBAV|FB_IAB|Instagram|MicroMessenger|WhatsApp|KAKAOTALK/i.test(UA);
 navigator.xr?.isSessionSupported?.('immersive-ar').then(v=>arSupport.xr=v).catch(()=>{});
 /* native AR: iOS AR Quick Look (USDZ) / Android Scene Viewer (GLB) — real plane tracking, 1:1 scale, environment lighting & grounding shadow */
-let DEFAULT_KEY=null,ready=null;const BUILD='20261120h';const staticCache={};
+let DEFAULT_KEY=null,ready=null;const BUILD='20261120i';const staticCache={};
 function modelKey(){return JSON.stringify([S.flipSec,S.size,S.W,S.H,S.T,S.bind,S.fit,S.fin,ART.name,ART.w,ART.h,ART.spine,ART.side])}
 async function hasStatic(f){if(inSandbox)return false;if(f in staticCache)return staticCache[f];try{const r=await fetch(f,{method:'HEAD',cache:'no-store'});staticCache[f]=r.ok}catch{staticCache[f]=false}return staticCache[f]}
 async function buildUSDZ(){return buildSmoothUSDZ()}
@@ -778,7 +778,7 @@ function snapGroup(name,scaled){bookRoot.updateMatrixWorld(true);const c=bookRoo
  const w=new THREE.Group();w.name=name;w.add(c);w.updateMatrixWorld(true);
  const bb=new THREE.Box3().setFromObject(c);const m=1.6,sw=bb.max.x-bb.min.x+2*m,sd=bb.max.z-bb.min.z+2*m;
  const fw=bb.max.x-bb.min.x,fd=bb.max.z-bb.min.z,cx=(bb.min.x+bb.max.x)/2,cz=(bb.min.z+bb.max.z)/2;const lift=Math.max(0,bb.min.y);
- if(lift<.35){const cw=.13;[[cx,bb.min.z-cw/2,fw+2*cw,cw],[cx,bb.max.z+cw/2,fw+2*cw,cw],[bb.min.x-cw/2,cz,cw,fd],[bb.max.x+cw/2,cz,cw,fd]].forEach(([x,z,sx,sz])=>{const m=new THREE.Mesh(SHADOW_GEO,CONTACT_MAT);m.scale.set(sx,1,sz);m.position.set(x,0.006,z);w.add(m)})}
+
  if(scaled){const r=new THREE.Group();r.add(w);r.scale.setScalar(0.01);r.updateMatrixWorld(true);return r}return w}
 function saveBookState(){return{p:leaves.map(l=>[l.pos,l.target,l.dir]),fo:flipOver,foT:flipOverT,uf:unfold,ufT:unfoldT}}
 function loadBookState(st){leaves.forEach((l,i)=>{[l.pos,l.target,l.dir]=st.p[i]});flipOver=st.fo;flipOverT=st.foT;unfold=st.uf;unfoldT=st.ufT;if(jacket)jacket.wasU=true;updateBook(0,true);applyPose()}
@@ -859,7 +859,7 @@ async function buildSmoothUSDZ(){const fflate=await import('three/addons/libs/ff
   ['L','R'].forEach(side=>{const m=slabs[side];const vis=m.visible&&!unf;key(`S${side}`,tc,[0,0,0],0,vis?1:1e-4);const sp=m.userData.slab.pos;
    for(let s=0;s<SG;s++){const i=s*SUB,j=i+SUB;const xa=sp.getX(2*i+1),xb=sp.getX(2*j+1),ya=sp.getY(2*i+1),yb=sp.getY(2*j+1),bot=sp.getY(2*i);const w=Math.abs(xb-xa)+.02,h=Math.max(.001,Math.min(ya,yb)-bot-.004);key(`S${side}_${s}`,tc,[mx((xa+xb)/2),bot,0],0,[w,h,1])}});
   key('Spine',tc,[mx(.02),0,0],mr(spineG.rotation.z),spineG.visible&&!unf?1:1e-4);
-  key('Back',tc,[0,0,0],0,backPlane.visible&&!unf?1:1e-4);
+  key('BackCover',tc,[0,0,0],0,backPlane.visible&&!unf?1:1e-4);
   key('Jacket',tc,[0,0,0],0,unf?1:1e-4);key('JF',tc,[0,jacket.fg.position.y,0],0,1);key('JS',tc,[mx(jacket.sp.position.x),jacket.sp.position.y,0],mr(jacket.sp.rotation.z),1);key('JB',tc,[mx(S.T),0,0],mr(jacket.bp.rotation.z),1);
   // footprint for contact line (world cm)
   box.makeEmpty();bookRoot.traverseVisible(o=>{if(o.isMesh&&o.name!=='contact'){o.geometry.computeBoundingBox();tmp.copy(o.geometry.boundingBox).applyMatrix4(o.matrixWorld);box.union(tmp)}});
@@ -870,7 +870,7 @@ async function buildSmoothUSDZ(){const fflate=await import('three/addons/libs/ff
  for(const n in tracks){const tk=tracks[n],out=[];tk.forEach((r,i)=>{const p=tk[i-1];if(p&&tiny(p[3])!==tiny(r[3])&&r[0]-p[0]>0.03)out.push([+(r[0]-0.01).toFixed(3),p[1],p[2],p[3]]);out.push(r)});tracks[n]=out}
  // ---- materials & textures
  const files={},mats=[],texIds=new Map();let nTex=0;
- async function texFile(src,png){if(texIds.has(src))return texIds.get(src);const img=src.isTexture?src.image:src;const sw=img.width||img.videoWidth,sh=img.height;const k=Math.min(1,2048/Math.max(sw,sh));const c=document.createElement('canvas');c.width=Math.round(sw*k);c.height=Math.round(sh*k);const g=c.getContext('2d');g.translate(0,c.height);g.scale(1,-1);g.drawImage(img,0,0,c.width,c.height);
+ async function texFile(src,png){if(texIds.has(src))return texIds.get(src);const img=src.isTexture?src.image:src;const sw=img.width||img.videoWidth,sh=img.height;const k=Math.min(1,2048/Math.max(sw,sh));const c=document.createElement('canvas');c.width=Math.round(sw*k);c.height=Math.round(sh*k);const g=c.getContext('2d');g.drawImage(img,0,0,c.width,c.height);
   const name=`textures/T${nTex++}.${png?'png':'jpg'}`;const b=await new Promise(r=>c.toBlob(r,png?'image/png':'image/jpeg',.9));files[name]=new Uint8Array(await b.arrayBuffer());texIds.set(src,name);return name}
  const f3=v=>`(${v.map(n=>+n.toFixed(5)).join(', ')})`;
  function mat(name,{tex=null,color=[1,1,1],rough=.9,cc=0,ccr=.5,wrap='clamp',tintTex=null}){const P=`/Root/Materials/${name}`;
@@ -920,12 +920,15 @@ async function buildSmoothUSDZ(){const fflate=await import('three/addons/libs/ff
    const head=[[[-.5,0,-hz],[.5,0,-hz],[.5,1,-hz],[-.5,1,-hz]],[[0,0],[1,0],[1,8],[0,8]],[0,0,-1]],tail=[[[-.5,0,hz],[.5,0,hz],[.5,1,hz],[-.5,1,hz]],[[0,0],[1,0],[1,8],[0,8]],[0,0,1]];
    const xa=[[[-.5,0,-hz],[-.5,0,hz],[-.5,1,hz],[-.5,1,-hz]],[[0,0],[H*.25,0],[H*.25,8],[0,8]],[-1,0,0]],xb=[[[.5,0,-hz],[.5,0,hz],[.5,1,hz],[.5,1,-hz]],[[0,0],[H*.25,0],[H*.25,8],[0,8]],[1,0,0]];
    const top=[[[-.5,1,-hz],[.5,1,-hz],[.5,1,hz],[-.5,1,hz]],[[0,0],[1,0],[1,1],[0,1]],[0,1,0]];
-   cols+=anim(`S${side}_${s}`,meshStr([head,tail,xa,xb],M_edge)+meshStr([top],M_paper))}slabStr+=anim(`S${side}`,cols)}
+   let bottom='';if(side==='L'){const d0=s*SUB*dl,d1=(s+1)*SUB*dl;const ua=R('back',U(d0/W),1),ub=R('back',U(d1/W),1),uc=R('back',U(d1/W),0),ud=R('back',U(d0/W),0);
+     // column local x runs -.5..+.5 ; in unmirrored inner space left slab goes toward -x, so +.5 is the spine side (d0)
+     bottom=meshStr([[[[.5,-.012,-hz],[-.5,-.012,-hz],[-.5,-.012,hz],[.5,-.012,hz]],[ua,ub,uc,ud],[0,-1,0]]],M_cover)}
+   cols+=anim(`S${side}_${s}`,meshStr([head,tail,xa,xb],M_edge)+meshStr([top],M_paper)+bottom)}slabStr+=anim(`S${side}`,cols)}
  // spine (plane in y-z at x=0 facing +x; spans y 0..T)
  const spQ=[[[0,0,-H/2],[0,T,-H/2],[0,T,H/2],[0,0,H/2]],[R('spine',U(1),1),R('spine',U(0),1),R('spine',U(0),0),R('spine',U(1),0)],[1,0,0]];
- const spine=anim('Spine',meshStr([spQ],M_cover));
+ const spQ2=[spQ[0].map(p=>[p[0]-.004,p[1],p[2]]),spQ[1],[-1,0,0]];const spine=anim('Spine',meshStr([spQ],M_cover)+meshStr([spQ2],M_paper));
  const bkQ=[[[-W,TC/2,-H/2],[0,TC/2,-H/2],[0,TC/2,H/2],[-W,TC/2,H/2]],[R('back',U(1),1),R('back',U(0),1),R('back',U(0),0),R('back',U(1),0)],[0,-1,0]];
- const back=anim('Back',meshStr([bkQ],M_cover));
+ const bkQ2=[bkQ[0].map(p=>[p[0],p[1]+.004,p[2]]),bkQ[1],[0,1,0]];const back=anim('BackCover',meshStr([bkQ],M_cover)+meshStr([bkQ2],M_paper));
  const fpan=quad(-W,0,0,-H/2,H/2,[R('front',U(0),1),R('front',U(1),1),R('front',U(1),0),R('front',U(0),0)],[0,1,0]),fin_=quad(-W,0,0,-H/2,H/2,[[0,0],[1,0],[1,1],[0,1]],[0,-1,0]);
  const span=quad(0,T,0,-H/2,H/2,[R('spine',U(0),1),R('spine',U(1),1),R('spine',U(1),0),R('spine',U(0),0)],[0,1,0]),sin_=quad(0,T,0,-H/2,H/2,[[0,0],[1,0],[1,1],[0,1]],[0,-1,0]);
  const bpan=quad(0,W,0,-H/2,H/2,[R('back',U(0),1),R('back',U(1),1),R('back',U(1),0),R('back',U(0),0)],[0,1,0]),bin_=quad(0,W,0,-H/2,H/2,[[0,0],[1,0],[1,1],[0,1]],[0,-1,0]);
@@ -933,7 +936,7 @@ async function buildSmoothUSDZ(){const fflate=await import('three/addons/libs/ff
  const inner_=anim('Inner',leavesStr+slabStr+spine+back+jacketStr);
  const bookStr=anim('Book',inner_);
  const cq=[[[-.5,0.006,-.5],[.5,0.006,-.5],[.5,0.006,.5],[-.5,0.006,.5]],[[0,0],[1,0],[1,1],[0,1]],[0,1,0]];
- const saveMIR=MIR;const contactStr=['CN','CS','CW','CE'].map(n=>anim(n,(()=>{return meshStr([cq],M_contact)})())).join('');
+ const contactStr='';
  const usda=`#usda 1.0
 (
 \tcustomLayerData = {
